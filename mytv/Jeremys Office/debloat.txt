@@ -1,0 +1,27 @@
+# Hisense SmartTV 4K (device lushan, Google TV 12, firmware STT2.230929.001.091), 192.168.1.131.
+# Applied 2026-11-02 in two batches with a screenshot after each, then one reboot: all eight stayed disabled,
+# nothing was re-enabled by the firmware at boot. Home, Inputs (HDMI 1-3, Live TV) and Wi-Fi worked.
+# Based on examples/hisense-smarttv-4k-ffm-lushan/debloat.txt.
+#
+# Kept ON by choice: every streaming app (TiviMate, Kick, Netflix, YouTube, Prime Video, Disney+, Hulu,
+# Apple TV, Plex), Google Assistant, Hisense Alexa, AirPlay, DLNA, Miracast, both OTA updaters and the screensaver.
+#
+# Disabled before this session (not by this list, left as they were): Hisense browser, YouTube Music,
+# Play Games, setupwraith (Google TV setup wizard), the ISDB tuner. com.mediatek.tis is disabled by the
+# firmware itself (enabled=2); the shell cannot change it, and it was left alone.
+# The stock launcher com.google.android.apps.tv.launcherx is disabled by the launcher install, not by this list.
+#
+# Apply:  tools\disable.ps1 -TvHost 192.168.1.131 mytv\debloat.txt
+# Undo:   mytv\restore.ps1
+
+# Tracking
+com.vt.tv.evservice                          # Hisense viewing-data (ACR) service
+com.google.android.partnersetup              # partner referral tracking
+com.google.android.feedback                  # crash/feedback uploader
+com.google.android.syncadapters.calendar     # calendar sync, unused on a TV
+
+# Hisense leftovers
+com.vt.hishow                                # "Family Moment" photo content and its (inactive) screensaver
+com.vt.storemode                             # store/demo mode
+com.vt.fte                                   # first-time setup hooks (setup already complete)
+com.vt.tv.protector                          # cleaner / "turbo mode" with a boot receiver

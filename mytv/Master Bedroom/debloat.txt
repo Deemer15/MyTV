@@ -1,0 +1,24 @@
+# Master Bedroom: onn 4K Pro Streaming Device (Gen 2, jarvis2), Google TV 14, build URO3.260203.035.A1.15640252
+# Based on examples/onn-4k-pro-gen2/debloat.txt (same build). Disabled, never uninstalled.
+# Applied in three batches: batch1.txt, batch2.txt, batch3.txt. Undo: pwsh mytv\restore.ps1 -Room 'Master Bedroom'
+#
+# Kept ON by choice: every streaming app (TiviMate, Plex, YouTube, YouTube Music, Netflix, Prime Video, Disney+,
+# Hulu, Apple TV), Google Assistant (katniss), Chromecast built-in (mediashell), the onn OTA updater, the remote's
+# Bluetooth/IR/firmware services, the Google screensaver (dreamx), Play Store and Play Services.
+#
+# Batch 1: telemetry and ads
+com.google.android.feedback                     # Google feedback uploader
+com.android.tv.feedbackconsent                  # feedback consent prompt
+com.android.adservices.api                      # Privacy Sandbox ad measurement
+com.android.ondevicepersonalization.services    # on-device ad personalization
+com.android.federatedcompute.services           # federated learning uploads
+# Batch 2: unused services
+com.google.android.play.games                   # Play Games stub (opens the Play Store)
+com.android.printspooler                        # printing
+com.google.android.marvin.talkback              # screen reader (not switched on)
+com.android.providers.calendar                  # calendar storage
+com.google.android.syncadapters.calendar        # calendar sync
+com.android.providers.contacts                  # contacts storage
+com.android.providers.userdictionary            # keyboard word list
+# Batch 3: setup wizard, so the new launcher can own Home. Only once the Wi-Fi network no longer belongs to it.
+com.google.android.tungsten.setupwraith         # first-run setup wizard; re-enable before a factory reset

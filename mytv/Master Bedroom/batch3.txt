@@ -1,0 +1,3 @@
+# Master Bedroom batch 3: setup wizard, so the new launcher can own Home (see debloat.txt).
+# Apply only after the Wi-Fi network no longer belongs to it: dumpsys wifi | grep -o 'cname=[^ ]*'
+com.google.android.tungsten.setupwraith

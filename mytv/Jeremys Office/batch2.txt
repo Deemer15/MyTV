@@ -1,0 +1,5 @@
+# Batch 2: Hisense leftovers. Hisense SmartTV 4K (lushan), Google TV 12, 192.168.1.131.
+com.vt.hishow                                # "Family Moment" photo content and its (inactive) screensaver
+com.vt.storemode                             # store/demo mode (boot + power receivers)
+com.vt.fte                                   # first-time setup hooks (setup already complete)
+com.vt.tv.protector                          # cleaner / "turbo mode" with a boot receiver

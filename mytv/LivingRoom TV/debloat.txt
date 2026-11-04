@@ -1,0 +1,26 @@
+# Living Room TV: onn. Streaming Device 4K pro (device SNA), Google TV 14 (SDK 34), build URO4.260304.011.B1.15051976,
+# 192.168.1.233. Disabled, never uninstalled.
+# Based on examples/onn-4k-pro-gen2/debloat.txt (same family; every package below was checked present on this unit).
+# Applied in three batches: batch1.txt, batch2.txt, batch3.txt. Undo: pwsh mytv\restore.ps1 -Room 'LivingRoom TV'
+#
+# Kept ON by choice, same as the office: every streaming app (TiviMate, Kick, Netflix, YouTube, Prime Video,
+# Disney+, Apple TV, Plex), Google Assistant (katniss), Chromecast built-in (mediashell), the onn OTA updater, the
+# remote's Bluetooth/IR/firmware services, the Google screensaver (dreamx), Play Store and Play Services.
+#
+# Batch 1: telemetry and ads
+com.google.android.feedback                     # Google feedback uploader
+com.android.tv.feedbackconsent                  # feedback consent prompt
+com.android.adservices.api                      # Privacy Sandbox ad measurement
+com.android.ondevicepersonalization.services    # on-device ad personalization
+com.android.federatedcompute.services           # federated learning uploads
+# Batch 2: unused services
+com.google.android.play.games                   # Play Games stub (opens the Play Store)
+com.android.printspooler                        # printing
+com.google.android.marvin.talkback              # screen reader (not switched on)
+com.android.providers.calendar                  # calendar storage
+com.google.android.syncadapters.calendar        # calendar sync
+com.android.providers.contacts                  # contacts storage
+com.android.providers.userdictionary            # keyboard word list
+# Batch 3: setup wizard, so the new launcher can own Home. Safe here: the saved Wi-Fi network belongs to
+# android.uid.system:1000, not to the wizard (checked with dumpsys wifi before disabling).
+com.google.android.tungsten.setupwraith         # first-run setup wizard; re-enable before a factory reset

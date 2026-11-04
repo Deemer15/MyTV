@@ -1,0 +1,8 @@
+# Master Bedroom batch 2: unused services (see debloat.txt)
+com.google.android.play.games
+com.android.printspooler
+com.google.android.marvin.talkback
+com.android.providers.calendar
+com.google.android.syncadapters.calendar
+com.android.providers.contacts
+com.android.providers.userdictionary

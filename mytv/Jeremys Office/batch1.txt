@@ -1,0 +1,5 @@
+# Batch 1: tracking. Hisense SmartTV 4K (lushan), Google TV 12, 192.168.1.131.
+com.vt.tv.evservice                          # Hisense viewing-data (ACR) service
+com.google.android.partnersetup              # partner referral tracking
+com.google.android.feedback                  # crash/feedback uploader
+com.google.android.syncadapters.calendar     # calendar sync, unused on a TV
