@@ -509,6 +509,173 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             });
         }, "weather").start();
     }
+
+    /** config calendar_widget: the next event (+N) in the next week, or "Calendar" when nothing is coming up. */
+    private boolean calendarOn;
+    private TextView eventsText;
+    private CalendarClient.Events events;
+    private boolean eventsFetching;
+    private static final long CALENDAR_REFRESH_MS = 30 * 60 * 1000L, CALENDAR_RETRY_MS = 5 * 60 * 1000L;
+    private final Runnable calendarTick = this::refreshCalendar;
+
+    private View eventsScroll;
+    private android.animation.ValueAnimator eventsScroller;
+
+    private void setUpCalendar() {
+        eventsText = findViewById(R.id.eventsText);
+        eventsScroll = findViewById(R.id.eventsScroll);
+        calendarOn = getResources().getBoolean(R.bool.calendar_widget)
+                && eventsText != null && eventsScroll != null
+                && !CalendarClient.url(this).isEmpty();
+    }
+
+    /** The event the rotator is currently showing, and the 5-second step between them. */
+    private int eventIndex;
+    private static final long CALENDAR_ROTATE_MS = 10_000L;
+    private final Runnable eventRotate = this::rotateEvents;
+
+    private static final long CALENDAR_FADE_MS = 400L;
+    /** The single right-to-left scroll: hold at the start, glide across, hold at the end. */
+    private static final long SCROLL_HOLD_MS = 1500L, SCROLL_PER_PX_MS = 16L;
+
+    private void applyEvents(CalendarClient.Events e) {
+        events = e;
+        handler.removeCallbacks(eventRotate);
+        eventsScroll.animate().cancel();
+        stopScroll();
+        eventIndex = 0;
+        if (e == null || e.list.isEmpty()) {
+            setEventText(getString(R.string.calendar_label));
+            fadeIn();
+            return;
+        }
+        showEvent(e.list.get(0));
+        if (e.list.size() > 1 && started) handler.postDelayed(eventRotate, CALENDAR_ROTATE_MS);
+    }
+
+    /** Steps to the next event every 10 seconds, looping with a crossfade; stops when there is nothing to rotate. */
+    private void rotateEvents() {
+        handler.removeCallbacks(eventRotate);
+        if (!calendarOn || !started || events == null || events.list.size() < 2) return;
+        // Fade the current one out, swap text at the bottom of the fade, then fade the next one in.
+        eventsScroll.animate().cancel();
+        eventsScroll.animate().alpha(0f).setDuration(CALENDAR_FADE_MS).withEndAction(() -> {
+            eventIndex = (eventIndex + 1) % events.list.size();
+            showEvent(events.list.get(eventIndex));
+        }).start();
+        handler.postDelayed(eventRotate, CALENDAR_ROTATE_MS);
+    }
+
+    private void showEvent(CalendarClient.Event ev) {
+        setEventText(ev.title + "  \u00B7  " + eventWhen(ev.start, ev.allDay));
+        fadeIn();
+    }
+
+    private void setEventText(String text) {
+        stopScroll();
+        eventsText.setText(text);
+        eventsScroll.setScrollX(0);
+        eventsScroll.setVisibility(View.VISIBLE);
+        // Once laid out, if the title overflows the pill, slide it right to left exactly once.
+        eventsScroll.post(this::scrollOnce);
+    }
+
+    /** One pass: pause, ease across the overflow, pause at the end. Does nothing when the text fits. */
+    private void scrollOnce() {
+        stopScroll();
+        if (!started) return;
+        int overflow = eventsText.getWidth() - eventsScroll.getWidth();
+        if (overflow <= 0) return;   // fits: no scroll
+        android.animation.ValueAnimator a = android.animation.ValueAnimator.ofInt(0, overflow);
+        a.setStartDelay(SCROLL_HOLD_MS);
+        a.setDuration(Math.max(600L, overflow * SCROLL_PER_PX_MS));
+        a.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+        a.addUpdateListener(v -> eventsScroll.setScrollX((int) v.getAnimatedValue()));
+        eventsScroller = a;
+        a.start();
+    }
+
+    private void stopScroll() {
+        if (eventsScroller != null) {
+            eventsScroller.cancel();
+            eventsScroller = null;
+        }
+    }
+
+    private void fadeIn() {
+        eventsScroll.animate().cancel();
+        eventsScroll.setAlpha(0f);
+        eventsScroll.animate().alpha(1f).setDuration(CALENDAR_FADE_MS).start();
+    }
+
+    /** "3:00 PM" today, "Tomorrow 3:00 PM", else "Fri 3:00 PM"; all-day drops the time ("Today"/"Tomorrow"/"Fri"). */
+    private String eventWhen(long start, boolean allDay) {
+        java.util.Calendar now = java.util.Calendar.getInstance();
+        java.util.Calendar ev = java.util.Calendar.getInstance();
+        ev.setTimeInMillis(start);
+        int dayDiff = daysBetween(now, ev);
+
+        String day;
+        if (dayDiff <= 0) day = getString(R.string.events_today);
+        else if (dayDiff == 1) day = getString(R.string.events_tomorrow);
+        else day = android.text.format.DateFormat.format("EEE", ev).toString();
+
+        if (allDay) {
+            String allDayLabel = getString(R.string.events_all_day);
+            return dayDiff <= 0 ? allDayLabel : day + " " + allDayLabel;   // today: just "All Day"
+        }
+
+        String time = android.text.format.DateFormat.getTimeFormat(this).format(ev.getTime());
+        if (dayDiff <= 0) return time;              // today: just the time
+        return day + " " + time;
+    }
+
+    /** Whole calendar days from a to b (same day = 0), by day-of-era, so it ignores the time of day. */
+    private static int daysBetween(java.util.Calendar a, java.util.Calendar b) {
+        long ad = dayOfEra(a), bd = dayOfEra(b);
+        return (int) (bd - ad);
+    }
+
+    private static long dayOfEra(java.util.Calendar c) {
+        java.util.Calendar d = (java.util.Calendar) c.clone();
+        d.set(java.util.Calendar.HOUR_OF_DAY, 0);
+        d.set(java.util.Calendar.MINUTE, 0);
+        d.set(java.util.Calendar.SECOND, 0);
+        d.set(java.util.Calendar.MILLISECOND, 0);
+        return d.getTimeInMillis() / (24L * 60 * 60 * 1000);
+    }
+
+    private void refreshCalendar() {
+        handler.removeCallbacks(calendarTick);
+        if (!calendarOn || !started) return;
+        if (events != null && System.currentTimeMillis() - events.fetchedAt < CALENDAR_REFRESH_MS - 60_000L) {
+            applyEvents(events);   // fresh enough (e.g. back from an app): restart the rotation from the top
+            handler.postDelayed(calendarTick, CALENDAR_REFRESH_MS);
+            return;
+        }
+        if (eventsFetching) return;
+        eventsFetching = true;
+        final android.content.Context app = getApplicationContext();
+        new Thread(() -> {
+            CalendarClient.Events e = null;
+            boolean ok = false;
+            try {
+                e = CalendarClient.fetch(app);
+                ok = true;   // the fetch succeeded; null just means nothing in the window -> "Calendar"
+            } catch (java.io.IOException | RuntimeException ignored) {
+                // offline or the feed is down: keep what shows and try again soon
+            }
+            final CalendarClient.Events result = e;
+            final boolean fetched = ok;
+            handler.post(() -> {
+                eventsFetching = false;
+                if (fetched) applyEvents(result);
+                else if (events == null) applyEvents(null);   // first run failed: show "Calendar" rather than blank
+                if (started) handler.postDelayed(calendarTick, fetched ? CALENDAR_REFRESH_MS : CALENDAR_RETRY_MS);
+            });
+        }, "calendar").start();
+    }
+
     private final Runnable minuteTick = new Runnable() {
         @Override
         public void run() {
@@ -682,6 +849,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             date.setPadding(0, (int) (4 * density), 0, 0);
         }
         setUpWeather();
+        setUpCalendar();
         vpnApp = cfg.vpnApp;
         vpnPill = cfg.vpnPill && !cfg.topMenu;
         btnVpn = findViewById(R.id.btnVpn);
@@ -1255,6 +1423,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         clockRefresh.start();   // with timeReceiver: while Home is visible, paused or not
         tileRefresh.onStart();
         refreshWeather();
+        refreshCalendar();
     }
 
     @Override
@@ -1531,6 +1700,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         clockRefresh.stop();
         handler.removeCallbacks(clockCheck);
         handler.removeCallbacks(weatherTick);
+        handler.removeCallbacks(calendarTick);
+        handler.removeCallbacks(eventRotate);
+        if (eventsScroll != null) {
+            eventsScroll.animate().cancel();
+            eventsScroll.setAlpha(1f);   // don't leave it stuck faded-out if we stopped mid-crossfade
+        }
+        stopScroll();
         stopped = true;
         tileRefresh.onStop();
     }

@@ -340,6 +340,32 @@
                                 android:includeFontPadding="false" />
                         </LinearLayout>
 
+                        <!-- Events widget (config calendar_widget): the current event, or "No upcoming events".
+                             A long title scrolls right to left exactly once, driven in code (MainActivity.scrollOnce)
+                             via this HorizontalScrollView; Android's own marquee can't stop after a single pass. -->
+                        <HorizontalScrollView
+                            android:id="@+id/eventsScroll"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:scrollbars="none"
+                            android:overScrollMode="never"
+                            android:fillViewport="false"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:id="@+id/eventsText"
+                                android:gravity="left"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:singleLine="true"
+                                android:textColor="#CCFFFFFF"
+                                android:textSize="14sp"
+                                android:fontFamily="@string/font_regular"
+                                android:letterSpacing="0.06"
+                                android:includeFontPadding="false" />
+                        </HorizontalScrollView>
+
                         <!-- Lunar date ("Lunar 13/9 · Year of the Horse"), shown when lunar_date is on. -->
                         <TextView
                             android:id="@+id/lunarDate"

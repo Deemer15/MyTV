@@ -10,4 +10,4 @@
 -->
 <resources xmlns:tools="http://schemas.android.com/tools"
     tools:shrinkMode="strict"
-    tools:keep="@drawable/banner_*,@string/beast_api_base,@string/beast_api_key,@string/beast_library_root,@string/beast_media_base,@string/iptv_server,@string/iptv_username,@string/iptv_password,@string/tmdb_api_key" />
+    tools:keep="@drawable/banner_*,@string/beast_api_base,@string/beast_api_key,@string/beast_library_root,@string/beast_media_base,@string/iptv_server,@string/iptv_username,@string/iptv_password,@string/tmdb_api_key,@string/calendar_ics_url" />

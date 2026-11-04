@@ -27,6 +27,9 @@ launcher/app/src/main/res/values/iptv_secrets.xml
 launcher/app/src/main/res/values/beast_secrets.xml
 # TMDB api key for the Streaming section stays local
 launcher/app/src/main/res/values/tmdb_secrets.xml
+
+# Calendar "Events" widget private ICS URL stays local
+launcher/app/src/main/res/values/calendar_secrets.xml
 # Per-room TV snapshots (serials, device names) stay local
 mytv/*/backups/
 .venv/

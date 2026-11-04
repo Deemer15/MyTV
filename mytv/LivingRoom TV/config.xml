@@ -368,6 +368,8 @@
     <bool name="weather_widget">true</bool>
     <!-- Explore page: Home / Explore tabs; Explore opens the full-screen backdrop + Movies/Shows rails. -->
     <bool name="explore_page">true</bool>
+    <!-- Events widget (CalendarClient): next calendar events from the git-ignored calendar_ics_url, rotating with a crossfade. -->
+    <bool name="calendar_widget">true</bool>
     <!-- The Inputs list shows only HDMI ports and CEC devices that report connected. Empty ports, devices asleep in
          standby (some TVs, TCL among them, report an empty HDMI port as connected-standby, the same state a
          sleeping device has) and the AV jacks fold behind a "More inputs" row that expands the rest. An HDMI row

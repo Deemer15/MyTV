@@ -367,6 +367,10 @@
     <bool name="weather_widget">true</bool>
     <!-- Explore page (ExploreActivity): the rail's tab row becomes Home / Explore; Explore opens a full-screen backdrop with the focused title's logo and overview, and a Movies / Shows rail. On in every room. -->
     <bool name="explore_page">true</bool>
+    <!-- Events widget (CalendarClient): the upcoming events from the git-ignored calendar_ics_url, shown in the clock
+         block below the date and rotated every 10s with a crossfade; a long title scrolls once. "No upcoming events"
+         when the next week is empty. On in every room. -->
+    <bool name="calendar_widget">true</bool>
     <!-- The Inputs list shows only HDMI ports and CEC devices that report connected. Empty ports, devices asleep in
          standby (some TVs, TCL among them, report an empty HDMI port as connected-standby, the same state a
          sleeping device has) and the AV jacks fold behind a "More inputs" row that expands the rest. An HDMI row

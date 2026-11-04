@@ -23,6 +23,12 @@
     <string name="offline">Offline</string>
     <string name="not_available">Not available on this TV</string>
     <string name="cant_open">Can\'t open %1$s</string>
+    <!-- Events widget (calendar_widget) fallback when nothing is coming up in the next week. -->
+    <string name="calendar_label">No upcoming events</string>
+    <!-- Events widget day labels for the next event's time, e.g. "Dentist · Tomorrow 3:00 PM". -->
+    <string name="events_today">Today</string>
+    <string name="events_tomorrow">Tomorrow</string>
+    <string name="events_all_day">All Day</string>
     <string name="date_format">EEEE  d MMMM</string>
     <!-- Date next to the clock on Home; a locale can split it over two lines with \n. -->
     <string name="date_format_home" translatable="false">@string/date_format</string>
