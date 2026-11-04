@@ -109,11 +109,10 @@ onn 4K Pro Streaming Device (jarvis2), Google TV 14, build URO3.260203.035.A1.15
 onn. Streaming Device 4K pro (SNA), Google TV 14, build URO4.260304.011.B1.15051976, `192.168.1.233`. Set up on
 2026-11-03 to match the office, minus the Hisense-only parts (no HDMI inputs or tuner on a streaming box).
 
-- **Dock (4)**: TiviMate, Kick, Netflix, Apple TV. Set up the same as the office, then Apple TV was swapped into
-  YouTube's slot on the TV itself (reorder on the real remote: hold OK on a tile > Move); `config.xml` was
-  updated to match. No theme; Beast button and the merged Movies & Shows rail (`media_rail` on, `iptv_rail` off)
-  are on, 4 columns. Its `config.xml` differs from the office's in `dock_apps` (Apple TV, not YouTube),
-  `live_tv_package` (empty), `hidden_apps` (empty) and `show_inputs_pill` (false).
+- **Dock (5)**: TiviMate, Kick, Netflix, YouTube, Apple TV — same apps, same order as the office. No theme;
+  Beast button and the merged Movies & Shows rail (`media_rail` on, `iptv_rail` off) are on, 5 columns. Its
+  `config.xml` differs from the office's only in `live_tv_package` (empty), `hidden_apps` (empty) and
+  `show_inputs_pill` (false) — the parts that depend on this being a streaming box with no HDMI inputs or tuner.
 - **13 packages disabled** (never uninstalled), listed in [`LivingRoom TV\debloat.txt`](LivingRoom%20TV/debloat.txt),
   from the repo's `examples\onn-4k-pro-gen2\` list; applied as `batch1.txt` to `batch3.txt`. Checked identical across
   a reboot. Everything else stays on, as in the office.
