@@ -38,3 +38,5 @@ mytv/
 kiro-session-*.zip
 cleanyourtv.code-workspace
 .agents/
+# Local agent conventions / steering (holds a LAN IP and work-email reference) — stays local
+.kiro/
