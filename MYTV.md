@@ -6,7 +6,7 @@ unused system services are disabled (never uninstalled). The original project's 
 
 This is a private, personal backup. Nothing here is meant for upstream.
 
-![The MyTV home screen: clock with the weather, Beast and Settings buttons, the Movies & Shows rail and the dock](docs/mytv/home.jpg)
+![The MyTV home screen: clock with the weather, Beast and Settings buttons, the Movies & Shows rail and the dock](docs/screenshots/home.jpg)
 
 ## What I added on top of upstream
 
