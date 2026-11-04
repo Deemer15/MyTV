@@ -27,13 +27,12 @@
          set "fill_dock": false. -->
     <bool name="fill_dock">true</bool>
 
-    <!-- Apps never shown as tiles (e.g. the Live TV app, which the Inputs menu already covers). -->
+    <!-- Apps never shown as tiles. None here: this box has no Live TV app. -->
     <string-array name="hidden_apps">
-        <item>com.vt.tv.tvcenter</item>             <!-- Hisense Live TV, reached through the Inputs menu -->
     </string-array>
 
     <!-- The TV's Live TV / tuner app, offered at the end of the Inputs menu. Leave empty to omit. -->
-    <string name="live_tv_package" translatable="false">com.vt.tv.tvcenter</string>
+    <string name="live_tv_package" translatable="false"></string>
 
     <!-- Open the Live TV app above the first time Home comes up after the TV is switched on, for sets that are
          mostly used for broadcast TV. Once per boot: Home after that stays Home. Can also be set with
@@ -363,7 +362,7 @@
     <bool name="media_rail">true</bool>
     <bool name="iptv_rail">false</bool>
 
-    <bool name="show_inputs_pill">true</bool>
+    <bool name="show_inputs_pill">false</bool>
     <!-- The Inputs list shows only HDMI ports and CEC devices that report connected. Empty ports, devices asleep in
          standby (some TVs, TCL among them, report an empty HDMI port as connected-standby, the same state a
          sleeping device has) and the AV jacks fold behind a "More inputs" row that expands the rest. An HDMI row

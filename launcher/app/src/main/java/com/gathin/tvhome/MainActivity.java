@@ -52,6 +52,7 @@ import android.text.Spanned;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.text.style.ForegroundColorSpan;
+import android.util.LruCache;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -90,6 +91,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * tvOS style home: black, a pinned dock row, an app grid, and one glass highlight that springs between tiles.
@@ -118,6 +121,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * time arrives; the clock, date and greeting stay hidden before then.
      */
     private static final long TIME_VALID_AFTER_MS = 1_735_689_600_000L;
+    /** One-shot: a Home-button press (onNewIntent) chose to land focus on the media rail, so the onResume that
+     *  follows must not let its tile rebuild grab focus back to the grid (which would hide the rail). */
+    private boolean railFocusAfterHome;
     private String liveTvPkg;
     /** Launcher settings' change count this Home was built with (see onResume). */
     private long settingsRevision;
@@ -175,6 +181,19 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private final Map<String, Bitmap> heroArtCache = new HashMap<>();
     /** The app whose artwork heroArt shows, so focusing it again only fades it back in. */
     private String heroArtKey;
+
+    // ---- Movies & Shows backdrop (behind everything, driven by MediaRail focus) ----
+    /** Full-screen softened art for the focused carousel item; its scrim keeps the UI readable over it. */
+    private ImageView mediaBackdrop;
+    private View mediaBackdropScrim;
+    /** Opacity of the media backdrop art when shown; the scrim carries the darkening for legibility. */
+    private static final float MEDIA_BACKDROP_ALPHA = 0.55f;
+    /** Softened backdrop per item art URL (HeroArt.fromBitmap, about 5 KB each), capped so Home stays small. */
+    private final LruCache<String, Bitmap> mediaBackdropCache = new LruCache<>(16);
+    /** The art URL the media backdrop currently shows, so re-focusing the same item only fades it back in. */
+    private String mediaBackdropKey;
+    /** Serialises backdrop fetch/blur off the main thread; created lazily, shut down in onDestroy. */
+    private ExecutorService mediaBackdropWorker;
     /** The focus glow's colour while the cinematic shelf tints it, 0 for plain white glass. */
     private int glassAccent;
     private int ambientColor = -1;
@@ -531,6 +550,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         heroMeta = findViewById(R.id.heroMeta);
         heroDots = findViewById(R.id.heroDots);
         heroArt = findViewById(R.id.heroArt);
+        mediaBackdrop = findViewById(R.id.mediaBackdrop);
+        mediaBackdropScrim = findViewById(R.id.mediaBackdropScrim);
+        mediaBackdropScrim.setBackground(scrimDrawable());
         cinematic = cfg.cinematicHome;
         glowStyle = cfg.glowStyle;
         heroDotsShown = cfg.cinematicDots;
@@ -714,7 +736,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             // Keep the hero below the header when the library is enabled on a short screen,
             // even when the theme requests an extra visible row below the dock.
             int shelfClearance = cfg.appLibrary ? hero.getMeasuredHeight() + (int) (40 * density) : 0;
-            int want = Math.max(shelfClearance, h - dockRow - gridRows - (int) (AppAdapter.BOTTOM_ROOM_DP * density));
+            // The media rail band sits above the dock; its height is fixed (not derived from the dock), so a tall
+            // band would hang over the dock. Push the dock down so the band clears it: the dock top (grid padding
+            // line) must leave room for the header area + the band + a gap. Measured in grid-top coordinates.
+            int railClearance = 0;
+            if (mediaRail != null) {
+                int gridTopInRoot = 0;
+                Rect gr = new Rect(0, 0, grid.getWidth(), grid.getHeight());
+                root.offsetDescendantRectToMyCoords(grid, gr);
+                gridTopInRoot = gr.top;
+                int bandBottomInRoot = (int) headerBottomInRoot() + mediaRail.bandHeight() + (int) (16 * density);
+                railClearance = Math.max(0, bandBottomInRoot - gridTopInRoot);
+            }
+            int want = Math.max(Math.max(shelfClearance, railClearance),
+                    h - dockRow - gridRows - (int) (AppAdapter.BOTTOM_ROOM_DP * density));
             // Where the rows cannot fit even at the smallest tile (3 rows with the title on), the title keeps its
             // room above the dock and the last rows run off the bottom instead of the title drawing over the clock.
             if (MainActivity.this.dockRow && cfg.dockTitle && rowsBelowDock > 0) want = Math.max(want, (int) (AppAdapter.TITLE_ROOM_DP * density));
@@ -956,20 +991,29 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (dockRow && !singleRow) {
             mediaRail = MediaRail.create(this, root, glass, new MediaRail.Host() {
                 @Override public void onRailUp() {
+                    hideMediaBackdrop();
                     (btnInputs.getVisibility() == View.VISIBLE ? btnInputs : firstTopButton()).requestFocus();
                 }
 
                 @Override public void onRailDown() {
+                    hideMediaBackdrop();
                     focusTile(lastFocused % COLUMNS);
                 }
 
                 @Override public void onRailFocused() {
-                    hideHero();
+                    hideHero();   // the hero shelf is GONE on this layout (set above); harmless backstop
                 }
 
-                @Override public void onItemFocused(MediaItem item) { }
+                @Override public void onItemFocused(MediaItem item) {
+                    showMediaBackdrop(item);
+                }
             });
             if (mediaRail != null) {
+                // The media rail owns the band above the dock, so the big dock-app-name shelf ("TiviMate", drawn
+                // by `hero`) has no place here — and with the dock dropped to clear the rail, it was bleeding a
+                // faint label into the gap. Remove it entirely on this layout rather than fight its alpha in every
+                // focus path. The app tiles and their own under-tile names are unaffected.
+                hero.setVisibility(View.GONE);
                 grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
                     @Override public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
                         mediaRail.setGridAtTop(rv.computeVerticalScrollOffset() <= (int) (8 * density));
@@ -1109,8 +1153,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     /**
      * Home pressed while Home is already in front: singleTask delivers it here, then onResume runs.
-     * Back to the top with the first dock tile focused, like the stock launcher. Back from an app
-     * never comes this way, so returning to the app you left from is unchanged (#118).
+     * Back to the top, like the stock launcher. With the media rail present the top is the rail (its showcase),
+     * so focus lands there; otherwise the first dock tile. Back from an app never comes this way, so returning to
+     * the app you left from is unchanged (#118).
      */
     @Override
     protected void onNewIntent(Intent intent) {
@@ -1123,12 +1168,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         grid.scrollToPosition(0);
         lastFocused = 0;
         lastFocusedKey = adapter.getItemCount() > 0 ? adapter.keyAt(0) : null;
+        // The media rail sits above the dock and is the true top of the layout. Focusing a dock tile here would
+        // nudge the grid's scroll offset and flip the rail's grid-at-top flag false, hiding the rail on a Home
+        // press. So when the rail has content, land focus on it (which also keeps it on screen).
+        boolean railTakesFocus = mediaRail != null && mediaRail.hasItems();
         if (stopped) {
+            // A real resume (with a tile rebuild) is coming: tell it not to let the grid grab focus back off the
+            // rail. Only armed here, where onResume follows, so the flag can't go stale on the overlay path below.
+            railFocusAfterHome = railTakesFocus;
             tileRefresh.onHomeAgain();
+            if (railTakesFocus) grid.post(() -> mediaRail.focusFromHomeKey());
         } else {
             // Still on screen (the quick panel was over it, or Home was already in front): the tiles are current,
-            // so only go back to the first one; rebuilding would replay the entrance animation for nothing.
-            grid.post(() -> focusTile(0));
+            // so only go back to the top; rebuilding would replay the entrance animation for nothing.
+            if (railTakesFocus) grid.post(() -> mediaRail.focusFromHomeKey());
+            else grid.post(() -> focusTile(0));
         }
     }
 
@@ -1168,20 +1222,31 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (IptvRail != null) IptvRail.refresh();   // asks the provider when Home comes up, at most every 10 min
         if (mediaRail != null) mediaRail.refresh(); // asks both sources when Home comes up, at most every 10 min
         if (grid.getAdapter() == null) grid.setAdapter(adapter);   // dropped by onTrimMemory
+        // If the user left Home from the media rail (to play something or browse), the rail owns focus on this
+        // resume. The tile rebuild below must then NOT also post focus back to a grid tile: that focus-scroll
+        // fires the grid's OnScrollListener -> setGridAtTop(false) and pulls focus off the showcase, which hid the
+        // rail right after it appeared ("flashes then disappears"). Skip the grid's focus restore in that case.
+        boolean railOwnsFocus = mediaRail != null
+                && (mediaRail.wantsFocusOnResume() || railFocusAfterHome);
+        railFocusAfterHome = false;   // one-shot: consumed by this resume
         switch (tileRefresh.onResume(packagesChangedSinceRebuild())) {
             case REBUILD:
                 tilesReady = false;
-                reloadApps(true);
+                reloadApps(true, true, true, !railOwnsFocus);
                 break;
             case REFOCUS:
                 // The same tiles: only the focus goes back, as after a rebuild, without replaying the entrance.
                 tilesReady = false;
-                reloadApps(true, false, false);
+                reloadApps(true, false, false, !railOwnsFocus);
                 break;
             default:
                 break;
         }
         if (openLiveTvAfterBoot()) return;
+        // If the user left the media rail to play something or browse, put focus back on the showcase so returning
+        // lands where they were — and so the rail is guaranteed on screen.
+        if (mediaRail != null) mediaRail.restoreFocusIfRequested();
+        if (mediaRail != null) mediaRail.onResumed();   // allow idle auto-rotation now Home is in front again
         updateGreeting();
         updatePanel();
         // Back from an app opened from its tile, focus is still on that tile, so the cinematic "Last opened" line kept
@@ -1252,11 +1317,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         reloadApps(animate, rebuild, true);
     }
 
+    private void reloadApps(boolean animate, boolean rebuild, boolean entrance) {
+        reloadApps(animate, rebuild, entrance, true);
+    }
+
     /**
      * @param entrance false puts focus back as an animated reload would, without replaying the tiles' entrance:
      *                 on a return to the same tiles it would only mark a change that didn't happen.
+     * @param restoreGridFocus false rebuilds the tiles but does not grab focus back to the grid — used on resume
+     *                 when the media rail owns focus, so its focus-scroll can't steal it (and scroll-flip the rail
+     *                 away) before the rail restores focus to the showcase.
      */
-    private void reloadApps(boolean animate, boolean rebuild, boolean entrance) {
+    private void reloadApps(boolean animate, boolean rebuild, boolean entrance, boolean restoreGridFocus) {
         cancelPendingFocusScroll();
         RecyclerView.ViewHolder footer = grid.findViewHolderForAdapterPosition(adapter.appCount());
         final boolean restoreLibrary = adapter.isLibraryAt(adapter.appCount()) && footer != null
@@ -1265,7 +1337,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // Capture the app before rebinding can move focus and overwrite its key.
         final String returnKey = lastFocusedKey;
         final int returnSlot = lastFocused;
-        final boolean restoreFocus = appLibrary == null && (animate || grid.hasFocus());
+        final boolean restoreFocus = restoreGridFocus && appLibrary == null && (animate || grid.hasFocus());
         if (restoreFocus) {
             glassShown = false;
             glass.setAlpha(0f);
@@ -1369,6 +1441,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onPause() {
         super.onPause();
         resumed = false;
+        if (mediaRail != null) mediaRail.onPaused();   // stop idle auto-rotation while Home is backgrounded
         // No UP reaches a paused Home, so a vendor-key hold it saw go down would still open its app later.
         // Only Home's own share is dropped: a key service that saw the same DOWN keeps its hold.
         RemoteKeys.release(this);
@@ -1446,6 +1519,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         cancelHoldOk();
         if (IptvRail != null) IptvRail.release();
         if (mediaRail != null) mediaRail.release();
+        if (mediaBackdropWorker != null) mediaBackdropWorker.shutdownNow();
         if (gameDay != null) gameDay.shutdown();
         unregisterReceiver(packageReceiver);
         if (openOnStartOnWake) unregisterReceiver(wakeReceiver);
@@ -2139,6 +2213,87 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private void fadeHeroArt(int ms) {
         if (!animations) heroArt.setAlpha(heroArtAlpha);
         else heroArt.animate().alpha(heroArtAlpha).setDuration(reducedMotion ? Math.min(ms, Motion.REDUCED_MS) : ms).start();
+    }
+
+    // ---- Movies & Shows backdrop ------------------------------------------------------------------
+
+    /**
+     * Softens the focused carousel item's art (its wide backdrop, or the poster as a fallback) into a tiny bitmap
+     * and crossfades it in behind everything — the blurred-art look of the reference, using the heroArt downscale
+     * trick so there is no per-frame blur cost. No art (a download with no backdrop, or a fetch miss) fades it out.
+     */
+    private void showMediaBackdrop(MediaItem item) {
+        if (mediaBackdrop == null) return;
+        String url = item == null ? null
+                : (item.backdrop != null && !item.backdrop.isEmpty() ? item.backdrop
+                   : (item.poster != null && !item.poster.isEmpty() ? item.poster : null));
+        if (url == null) {
+            hideMediaBackdrop();
+            return;
+        }
+        if (url.equals(mediaBackdropKey) && mediaBackdrop.getVisibility() == View.VISIBLE) return;
+        mediaBackdropKey = url;
+
+        Bitmap cached = mediaBackdropCache.get(url);
+        if (cached != null) {
+            swapMediaBackdrop(cached);
+            return;
+        }
+        if (mediaBackdropWorker == null) mediaBackdropWorker = Executors.newSingleThreadExecutor();
+        final String fetchUrl = url;
+        mediaBackdropWorker.execute(() -> {
+            // 512 px source feeds a 192×108 softened backdrop with a single blur pass: a much crisper, lightly
+            // defocused look that keeps the high-quality TMDB backdrop's detail. Still a small bitmap stretched by
+            // the ImageView (~80 KB), so there is still no per-frame blur cost (see HeroArt).
+            Bitmap raw = RailImages.fetch(fetchUrl, 512);
+            if (raw == null) return;                      // fetch miss: leave whatever is showing
+            Bitmap soft = HeroArt.fromBitmap(raw, 192, 108, 1);
+            raw.recycle();
+            if (soft == null) return;
+            handler.post(() -> {
+                mediaBackdropCache.put(fetchUrl, soft);
+                // Only apply if this is still the item the user is on (focus may have moved during the fetch).
+                if (fetchUrl.equals(mediaBackdropKey)) swapMediaBackdrop(soft);
+            });
+        });
+    }
+
+    /** Crossfades the backdrop (and its scrim) to {@code art}: fade out, swap, fade in, like showHeroArt. */
+    private void swapMediaBackdrop(Bitmap art) {
+        mediaBackdrop.animate().cancel();
+        boolean hidden = mediaBackdrop.getVisibility() != View.VISIBLE || mediaBackdrop.getAlpha() == 0f;
+        mediaBackdrop.setVisibility(View.VISIBLE);
+        mediaBackdropScrim.setVisibility(View.VISIBLE);
+        if (!animations || reducedMotion || hidden) {
+            mediaBackdrop.setImageBitmap(art);
+            mediaBackdrop.setAlpha(MEDIA_BACKDROP_ALPHA);
+            mediaBackdropScrim.setAlpha(1f);
+            return;
+        }
+        mediaBackdrop.animate().alpha(0f).setDuration(140).withEndAction(() -> {
+            mediaBackdrop.setImageBitmap(art);
+            mediaBackdrop.animate().alpha(MEDIA_BACKDROP_ALPHA).setDuration(420).start();
+        }).start();
+        if (mediaBackdropScrim.getAlpha() < 1f) mediaBackdropScrim.animate().alpha(1f).setDuration(420).start();
+    }
+
+    /** Fades the media backdrop and its scrim out, e.g. when focus leaves the rail. */
+    private void hideMediaBackdrop() {
+        if (mediaBackdrop == null || mediaBackdrop.getVisibility() != View.VISIBLE) return;
+        mediaBackdropKey = null;
+        mediaBackdrop.animate().cancel();
+        if (!animations) {
+            mediaBackdrop.setAlpha(0f);
+            mediaBackdrop.setVisibility(View.GONE);
+            mediaBackdropScrim.setAlpha(0f);
+            mediaBackdropScrim.setVisibility(View.GONE);
+            return;
+        }
+        int ms = reducedMotion ? Motion.REDUCED_MS : 200;
+        mediaBackdrop.animate().alpha(0f).setDuration(ms)
+                .withEndAction(() -> mediaBackdrop.setVisibility(View.GONE)).start();
+        mediaBackdropScrim.animate().alpha(0f).setDuration(ms)
+                .withEndAction(() -> mediaBackdropScrim.setVisibility(View.GONE)).start();
     }
 
     /** "Last opened yesterday, 9:40 PM", the time in white; nothing (but the same height) when it was never seen. */

@@ -25,15 +25,25 @@
     </string-array>
 
     <string name="media_rail_title" translatable="false">Movies &amp; Shows</string>
-    <string name="media_rail_badge_download" translatable="false">DL</string>
-    <string name="media_rail_badge_stream" translatable="false">Stream</string>
+    <!-- Tabs above the showcase: Explore (all), Movies (films), Shows (series). -->
+    <string name="media_rail_tab_explore" translatable="false">Explore</string>
+    <string name="media_rail_tab_movies" translatable="false">Movies</string>
+    <string name="media_rail_tab_shows" translatable="false">Shows</string>
+    <!-- Shown in the showcase when the chosen tab has no items. -->
+    <string name="media_rail_empty" translatable="false">Nothing here yet</string>
+    <string name="media_rail_empty_movies" translatable="false">No movies yet</string>
+    <string name="media_rail_empty_shows" translatable="false">No shows yet</string>
+    <string name="media_rail_badge_download" translatable="false">Local</string>
+    <string name="media_rail_badge_stream" translatable="false">IPTV</string>
     <string name="media_rail_added_today" translatable="false">added today</string>
     <string name="media_rail_added_yesterday" translatable="false">added yesterday</string>
     <string name="media_rail_added_days" translatable="false">added %1$d days ago</string>
     <string name="media_rail_no_player" translatable="false">No video player installed for this item</string>
 
-    <!-- The final tile of the row opens the full browse view (Tier 2). -->
+    <!-- Rotating past the last title puts the showcase into a "Show more" state (no strip tile); OK opens the
+         full browse view (Tier 2). media_rail_show_more_sub is the line under it in the showcase. -->
     <string name="media_rail_show_more" translatable="false">Show more</string>
+    <string name="media_rail_show_more_sub" translatable="false">Browse everything</string>
     <!-- Series card: how many downloaded episodes are new. %1$d is the count. -->
     <string name="media_rail_new_episodes" translatable="false">%1$d new episodes</string>
     <string name="media_rail_new_episode_one" translatable="false">1 new episode</string>

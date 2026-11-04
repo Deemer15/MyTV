@@ -85,6 +85,46 @@ final class TmdbClient {
         return out;
     }
 
+    /**
+     * Looks up one movie by title (optionally constrained to a release year) and returns its wide backdrop URL, or
+     * null when there is no api key, no match, or the match has no backdrop. Used to enrich a Media rail item whose
+     * provider gave only a poster, so the wide showcase shows a 16:9 still instead of a cropped poster. Blocks; run
+     * off the main thread. The year, when > 0, is passed to TMDB to disambiguate remakes and same-named series.
+     */
+    String searchBackdrop(String title, int year) throws IOException {
+        if (apiKey.isEmpty() || title == null || title.trim().isEmpty()) return null;
+        String url = "https://api.themoviedb.org/3/search/movie?api_key=" + Uri.encode(apiKey)
+                + "&query=" + Uri.encode(title.trim()) + "&include_adult=false";
+        if (year > 0) url += "&year=" + year;
+        try (Reply reply = open(url)) {
+            JsonReader r = reply.json;
+            r.beginObject();
+            while (r.hasNext()) {
+                if ("results".equals(r.nextName()) && r.peek() == JsonToken.BEGIN_ARRAY) {
+                    r.beginArray();
+                    // Take the first result: TMDB orders search hits by relevance/popularity, and the year filter
+                    // above already narrows a same-named remake to the right one when a year is known.
+                    while (r.hasNext()) {
+                        String backdropPath = "";
+                        r.beginObject();
+                        while (r.hasNext()) {
+                            if ("backdrop_path".equals(r.nextName())) backdropPath = string(r);
+                            else r.skipValue();
+                        }
+                        r.endObject();
+                        String bd = backdropUrl(backdropPath.trim());
+                        if (bd != null) return bd;   // first hit that actually has a backdrop
+                    }
+                    r.endArray();
+                } else {
+                    r.skipValue();
+                }
+            }
+            r.endObject();
+        }
+        return null;
+    }
+
     /** The year from a "YYYY-MM-DD" release date, or 0 when it is absent or unparseable. */
     private static int yearOf(String release) {
         if (release == null || release.length() < 4) return 0;
