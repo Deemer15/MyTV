@@ -27,6 +27,8 @@ nothing here is meant for upstream. The original project's README is kept for re
 "Beast" is my nickname for **Mediarium**, the self-hosted media server running on my home network. It is the
 source behind both the Movies & Shows rail and the Beast button, and nothing in it leaves the LAN.
 
+![Mediarium Dashboard: server CPU, memory and storage, and download status](docs/screenshots/beast-dashboard.jpg)
+
 What it does:
 
 - **Keeps a download library.** Mediarium manages a library of downloaded movies and shows and serves the files
@@ -47,6 +49,26 @@ How the pieces fit:
 | Beast button | Opens the Mediarium web panel full-screen in a guarded WebView |
 | Movies & Shows rail | Mediarium downloads (mpv) + IPTV newest movies (Just Player), deduped, art from TMDB |
 | Explore page | A full-screen browser over the same two sources |
+
+A tour of the panel:
+
+![Mediarium Discover: filter bar and a Plex watchlist rail with Downloaded badges](docs/screenshots/beast-discover.jpg)
+
+*Discover* — browse and filter movies, shows and books (by genre, year, popularity), with "hide owned" and a
+Plex watchlist rail.
+
+![Mediarium Library: Movies/TV/Ebooks tabs with rich filters and download-status chips](docs/screenshots/beast-library.jpg)
+
+*Library* — everything already in the collection, filtered by codec, HDR, resolution, audio, subtitles and more,
+with per-status counts.
+
+![Mediarium Upcoming: a release calendar for the month](docs/screenshots/beast-upcoming.jpg)
+
+*Upcoming* — a release calendar (month, posters, backdrops or agenda) for titles on the way.
+
+![Mediarium Activity: download status tiles and a "waiting for a release" card](docs/screenshots/beast-activity.jpg)
+
+*Activity* — what is downloading, waiting, or finished, and why a title is still pending.
 
 The server addresses, the IPTV login and the TMDB key are **not** in this repo: they live in git-ignored
 `*_secrets.xml` files that a fresh clone recreates locally. See
