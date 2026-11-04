@@ -11,7 +11,7 @@
 # firmware itself (enabled=2); the shell cannot change it, and it was left alone.
 # The stock launcher com.google.android.apps.tv.launcherx is disabled by the launcher install, not by this list.
 #
-# Apply:  tools\disable.ps1 -TvHost 192.168.1.131 mytv\debloat.txt
+# Apply:  tools\disable.ps1 -TvHost 192.168.1.131 "mytv\Jeremys Office\debloat.txt"
 # Undo:   mytv\restore.ps1
 
 # Tracking

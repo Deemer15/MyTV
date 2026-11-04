@@ -60,7 +60,7 @@ Hisense SmartTV 4K (lushan), Google TV 12, firmware STT2.230929.001.091. Set up 
   Hisense "cleaner". Applied as `batch1.txt` and `batch2.txt`, which the restore replays.
 - **Home**: the Clean Your TV launcher. Google TV home (`com.google.android.apps.tv.launcherx`) is disabled so it
   can't take Home back.
-- **Dock (4)**: TiviMate, Kick, Netflix, YouTube.
+- **Dock (5)**: TiviMate, Kick, Netflix, YouTube, Apple TV.
 - **Inputs menu**: HDMI 1-3 and Live TV (`com.vt.tv.tvcenter`, hidden from the grid).
 - **Theme**: `themes\christmas` (Santa's sleigh wallpaper, glass dock). Screensaver: the stock Google TV
   backdrop.

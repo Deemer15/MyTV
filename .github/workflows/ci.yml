@@ -1,9 +1,11 @@
+# Upstream's CI, kept for reference. It checks this repo against Gathin23/cleanyourtv's own conventions
+# (a translation-key table, Hebrew layout parity, a restore-list index, etc.), which this personal fork
+# does not maintain. Not run automatically here; trigger it by hand from the Actions tab if wanted
+# (workflow_dispatch) or re-enable push/pull_request to run it again on every change.
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
