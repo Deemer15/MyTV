@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "Z:/Beast"
+		},
+		{
+			"path": "Z:/Mediarium"
+		}
+	],
+	"settings": {
+		"sarif-viewer.connectToGithubCodeScanning": "off"
+	}
+}
