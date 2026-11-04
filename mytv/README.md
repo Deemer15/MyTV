@@ -46,7 +46,7 @@ copied over the launcher's on every build. Then run `build-and-install.ps1` for 
 Package names: TiviMate `ar.tvplayer.tv`, Netflix `com.netflix.ninja`, YouTube `com.google.android.youtube.tv`,
 Prime Video `com.amazon.amazonvideo.livingroom`, Disney+ `com.disney.disneyplus`, Hulu `com.hulu.livingroomplus`,
 Apple TV `com.apple.atve.androidtv.appletv`, Plex `com.plexapp.android`, Kick `com.kick.mobile`,
-Just Player `com.brouken.player`.
+Just Player `com.brouken.player`, SmartTube beta `org.smarttube.beta`.
 
 Tiles can also be reordered on the TV itself: hold OK on the Settings pill and pick Reorder.
 
@@ -60,7 +60,9 @@ Hisense SmartTV 4K (lushan), Google TV 12, firmware STT2.230929.001.091. Set up 
   Hisense "cleaner". Applied as `batch1.txt` and `batch2.txt`, which the restore replays.
 - **Home**: the Clean Your TV launcher. Google TV home (`com.google.android.apps.tv.launcherx`) is disabled so it
   can't take Home back.
-- **Dock (5)**: TiviMate, Kick, Netflix, YouTube, Apple TV.
+- **Dock (5)**: TiviMate, Kick, Netflix, SmartTube (beta), Apple TV. SmartTube (`org.smarttube.beta`, 32.68) is in
+  YouTube's old slot; stock YouTube is still installed, just not in the dock. It was installed by copying the APK
+  from the bedroom TV, see the Master Bedroom section.
 - **Inputs menu**: HDMI 1-3 and Live TV (`com.vt.tv.tvcenter`, hidden from the grid).
 - **Theme**: `themes\christmas` (Santa's sleigh wallpaper, glass dock). Screensaver: the stock Google TV
   backdrop.
@@ -93,7 +95,13 @@ onn 4K Pro Streaming Device (jarvis2), Google TV 14, build URO3.260203.035.A1.15
   devices the Cast credentials live in it.
 - **Home**: the Clean Your TV launcher; Google TV home is disabled.
 - **Just Player** 0.218: copied from the office TV and registered as a Play Store install, so it keeps updating.
-- **Dock (6)**: TiviMate, Plex, YouTube, Disney+, Prime Video, Apple TV.
+- **Dock (6)**: TiviMate, Plex, SmartTube (beta), Disney+, Prime Video, Apple TV. SmartTube
+  (`org.smarttube.beta`, 32.68) was installed on the TV and swapped into YouTube's slot; the stock YouTube app is
+  still installed, just not in the dock. The build running here is the universal one (35 MB, arm64 and 32-bit
+  libraries), which is what the office got. `Master Bedroom\SmartTube_beta_32.68_arm64-v8a.apk` (git-ignored) is
+  the arm64-only build: it will not install on these 32-bit boxes. To copy the working build to another TV, pull it
+  from this one: `adb pull <path from "pm path org.smarttube.beta">`, then install it with `pm install-create` /
+  `install-write` / `install-commit`.
 - **Hidden from the grid**: Play Games (a stub that opens the Play Store), YouTube Music and Just Player
   (the Movies & Shows rail opens it for IPTV titles).
 - **Beast button and Movies & Shows rail**: on, as in the other two rooms. Playing a "Local" download needs mpv
@@ -109,7 +117,8 @@ onn 4K Pro Streaming Device (jarvis2), Google TV 14, build URO3.260203.035.A1.15
 onn. Streaming Device 4K pro (SNA), Google TV 14, build URO4.260304.011.B1.15051976, `192.168.1.233`. Set up on
 2026-11-03 to match the office, minus the Hisense-only parts (no HDMI inputs or tuner on a streaming box).
 
-- **Dock (5)**: TiviMate, Kick, Netflix, YouTube, Apple TV — same apps, same order as the office. No theme;
+- **Dock (5)**: TiviMate, Kick, Netflix, YouTube, Apple TV — the office's dock, except the office now has
+  SmartTube where this TV still has YouTube. No theme;
   Beast button and the merged Movies & Shows rail (`media_rail` on, `iptv_rail` off) are on, 5 columns. Its
   `config.xml` differs from the office's only in `live_tv_package` (empty), `hidden_apps` (empty) and
   `show_inputs_pill` (false) — the parts that depend on this being a streaming box with no HDMI inputs or tuner.

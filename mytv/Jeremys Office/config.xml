@@ -20,7 +20,7 @@
         <item>ar.tvplayer.tv</item>                 <!-- TiviMate -->
         <item>com.kick.mobile</item>                <!-- Kick -->
         <item>com.netflix.ninja</item>              <!-- Netflix -->
-        <item>com.google.android.youtube.tv</item>  <!-- YouTube -->
+        <item>org.smarttube.beta</item>  <!-- SmartTube (beta), in YouTube's slot -->
         <item>com.apple.atve.androidtv.appletv</item>  <!-- Apple TV -->
     </string-array>
     <!-- With fewer dock_apps than columns (or a dock app that is not installed), the free dock slots take

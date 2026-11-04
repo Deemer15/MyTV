@@ -19,7 +19,7 @@
     <string-array name="dock_apps">
         <item>ar.tvplayer.tv</item>                     <!-- TiviMate -->
         <item>com.plexapp.android</item>                <!-- Plex -->
-        <item>com.google.android.youtube.tv</item>      <!-- YouTube -->
+        <item>org.smarttube.beta</item>              <!-- SmartTube (beta), in YouTube's slot -->
         <item>com.disney.disneyplus</item>              <!-- Disney+ -->
         <item>com.amazon.amazonvideo.livingroom</item>  <!-- Prime Video -->
         <item>com.apple.atve.androidtv.appletv</item>   <!-- Apple TV -->
