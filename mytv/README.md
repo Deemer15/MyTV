@@ -122,6 +122,58 @@ onn. Streaming Device 4K pro (SNA), Google TV 14, build URO4.260304.011.B1.15051
 - **Not done yet**: network ADB is still open. Switch USB debugging and Network debugging off on the TV, revoke
   authorisations, then check with `tools\adb-closed.py 192.168.1.233`.
 
+## Secrets files (git-ignored, recreate on a new PC)
+
+Three files in `launcher\app\src\main\res\values\` hold the logins and addresses. They are ignored by git, so a
+fresh clone has none of them. Each one is built into the launcher, so after changing a value rebuild every room
+that uses it. Every file has the same shape; the values below are placeholders.
+
+`iptv_secrets.xml`: the IPTV provider's Xtream Codes login. Used by the plain IPTV row and by the merged rail.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="iptv_server" translatable="false">https://host</string>
+    <string name="iptv_username" translatable="false">USERNAME</string>
+    <string name="iptv_password" translatable="false">PASSWORD</string>
+</resources>
+```
+
+`beast_secrets.xml`: the Beast (Mediarium) download library, for rooms with `media_rail` on. All four values are
+needed; if one is empty the Beast source is skipped and only IPTV shows.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="beast_api_base" translatable="false">http://SERVER:PORT</string>
+    <string name="beast_api_key" translatable="false">API_KEY</string>
+    <string name="beast_library_root" translatable="false">/absolute/library/path</string>
+    <string name="beast_media_base" translatable="false">http://SERVER:FILE_PORT</string>
+</resources>
+```
+
+- `beast_api_base`: the Mediarium server, no trailing slash. It is only read for the dashboard and file paths.
+- `beast_api_key`: the Mediarium API key (admin). It is sent as an `X-API-Key` header only, never in a playback URL.
+- `beast_library_root`: the absolute library path the server reports as the start of each file path, for example
+  `/mnt/e/Media/Torrents`. It must match what the server reports exactly, or titles get no playback URL.
+- `beast_media_base`: the static HTTP file server rooted at that same folder, no trailing slash. Playback swaps
+  the library root for this address.
+- Both hosts must be allowed as cleartext in `launcher\app\src\main\res\xml\network_security_config.xml`, or the
+  launcher cannot reach them over plain HTTP.
+
+`tmdb_secrets.xml`: a TMDB v3 API key. It fetches the wide backdrops and the "Show more" Streaming section.
+Without it the rail still works, with posters instead of backdrops and an empty Streaming section.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tmdb_api_key" translatable="false">TMDB_V3_API_KEY</string>
+</resources>
+```
+
+The rail turns on only when at least one of Beast or IPTV is fully set. Check what is missing with
+`git status --ignored launcher\app\src\main\res\values`.
+
 ## Latest movies row (both rooms)
 
 A row of posters between the clock and the dock: the 20 newest movies on the IPTV provider TiviMate uses, read
