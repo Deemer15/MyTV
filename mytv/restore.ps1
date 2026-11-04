@@ -1,9 +1,9 @@
 # Undo one room's debloat and launcher swap.
-#   pwsh mytv\restore.ps1 -Room 'Jeremys Office'                 re-enable everything and give Home back to Google TV
-#   pwsh mytv\restore.ps1 -Room 'Jeremys Office' -Package <pkg>  re-enable just one app
+#   pwsh mytv\restore.ps1 -Room 'Office'                 re-enable everything and give Home back to Google TV
+#   pwsh mytv\restore.ps1 -Room 'Office' -Package <pkg>  re-enable just one app
 # Needs USB debugging (and Network debugging) switched back on in Developer options, and the TV awake.
 param(
-    [Parameter(Mandatory)][ValidateSet('Jeremys Office', 'Master Bedroom', 'LivingRoom TV')][string]$Room,
+    [Parameter(Mandatory)][ValidateSet('Office', 'Master Bedroom', 'LivingRoom TV')][string]$Room,
     [string]$Package = ''
 )
 $ErrorActionPreference = 'Stop'

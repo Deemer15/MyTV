@@ -1,11 +1,11 @@
 # Build the launcher with one room's config.xml and install it on that room's TV.
-#   pwsh mytv\build-and-install.ps1 -Room 'Jeremys Office'
+#   pwsh mytv\build-and-install.ps1 -Room 'Office'
 #   pwsh mytv\build-and-install.ps1 -Room 'Master Bedroom'
 #   add -HomeKeyService for the remote helper (see README "Remote buttons")
 # Edit mytv\<room>\config.xml, not the one in launcher\: it is copied over the launcher's on every build.
 # Uses the portable JDK 17 + Android SDK in %LOCALAPPDATA%\cleanyourtv-toolchain (mytv\toolchain.ps1 sets it up).
 param(
-    [Parameter(Mandatory)][ValidateSet('Jeremys Office', 'Master Bedroom', 'LivingRoom TV')][string]$Room,
+    [Parameter(Mandatory)][ValidateSet('Office', 'Master Bedroom', 'LivingRoom TV')][string]$Room,
     [switch]$HomeKeyService,
     [switch]$InputKeyService
 )

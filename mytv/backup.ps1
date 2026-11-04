@@ -1,7 +1,7 @@
 # Read-only snapshot of the TV's package, property and settings state.
 # Usage: pwsh mytv\backup.ps1 -Room 'Master Bedroom' [-Out <folder>]   (default: mytv\<room>\backups\<date>)
 param(
-    [Parameter(Mandatory)][ValidateSet('Jeremys Office', 'Master Bedroom', 'LivingRoom TV')][string]$Room,
+    [Parameter(Mandatory)][ValidateSet('Office', 'Master Bedroom', 'LivingRoom TV')][string]$Room,
     [string]$Out = ''
 )
 $ErrorActionPreference = 'Stop'

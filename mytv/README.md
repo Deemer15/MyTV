@@ -5,12 +5,13 @@ Each room has its own folder with its launcher settings, debloat lists and backu
 
 | Room | Device | Address | Folder |
 |------|--------|---------|--------|
-| Jeremys Office | Hisense SmartTV 4K (lushan), Google TV 12 | `192.168.1.131` | [`Jeremys Office\`](Jeremys%20Office/) |
-| LivingRoom TV | onn. Streaming Device 4K pro (SNA), Google TV 14 | `192.168.1.233` | [`LivingRoom TV\`](LivingRoom%20TV/) |
-| Master Bedroom | onn 4K Pro Streaming Device (jarvis2), Google TV 14 | `192.168.1.214` | [`Master Bedroom\`](Master%20Bedroom/) |
+| Office | Hisense SmartTV 4K (lushan), Google TV 12 | `xxx.xxx.xxx.131` | [`Office\`](Office/) |
+| LivingRoom TV | onn. Streaming Device 4K pro (SNA), Google TV 14 | `xxx.xxx.xxx.233` | [`LivingRoom TV\`](LivingRoom%20TV/) |
+| Master Bedroom | onn 4K Pro Streaming Device (jarvis2), Google TV 14 | `xxx.xxx.xxx.214` | [`Master Bedroom\`](Master%20Bedroom/) |
 
-All three are on Wi-Fi "Poncho7G". The room names and addresses live in [`rooms.ps1`](rooms.ps1). If a TV gets a new
-address, change it there; better, give each TV a DHCP reservation on the router so it doesn't move.
+Addresses are shown with the first three octets masked. The room names and real addresses live in
+[`rooms.ps1`](rooms.ps1). If a TV gets a new address, change it there; better, give each TV a DHCP reservation on
+the router so it doesn't move.
 
 Every command below needs **USB debugging and Network debugging switched on** on that TV
 (Settings > System > Developer options), because it talks to the TV over the network. Accept the
@@ -21,8 +22,8 @@ Every command below needs **USB debugging and Network debugging switched on** on
 | To | Run |
 |----|-----|
 | Rebuild and install the launcher after editing a room's `config.xml` | `pwsh mytv\build-and-install.ps1 -Room 'Master Bedroom'` |
-| Undo a room's debloat and give Home back to Google TV | `pwsh mytv\restore.ps1 -Room 'Jeremys Office'` |
-| Re-enable one app | `pwsh mytv\restore.ps1 -Room 'Jeremys Office' -Package com.vt.hishow` |
+| Undo a room's debloat and give Home back to Google TV | `pwsh mytv\restore.ps1 -Room 'Office'` |
+| Re-enable one app | `pwsh mytv\restore.ps1 -Room 'Office' -Package com.vt.hishow` |
 | Snapshot a TV's packages and settings (read-only) | `pwsh mytv\backup.ps1 -Room 'Master Bedroom'` |
 | Push a theme | `pwsh tools\theme.ps1 -TvHost <address> themes\christmas` |
 | Remove the theme (plain black) | `pwsh tools\theme.ps1 -TvHost <address> -Reset` |
@@ -66,12 +67,12 @@ Just Player `com.brouken.player`, SmartTube beta `org.smarttube.beta`.
 
 Tiles can also be reordered on the TV itself: hold OK on the Settings pill and pick Reorder.
 
-## Jeremys Office
+## Office
 
 Hisense SmartTV 4K (lushan), Google TV 12, firmware STT2.230929.001.091. Set up on 2026-11-02.
 
 - **8 packages disabled** (never uninstalled), listed with reasons in
-  [`Jeremys Office\debloat.txt`](Jeremys%20Office/debloat.txt): Hisense viewing-data tracking (ACR), Google partner
+  [`Office\debloat.txt`](Office/debloat.txt): Hisense viewing-data tracking (ACR), Google partner
   tracking, the feedback uploader, calendar sync, Family Moment, store demo mode, first-time setup hooks and the
   Hisense "cleaner". Applied as `batch1.txt` and `batch2.txt`, which the restore replays.
 - **Home**: the Clean Your TV launcher. Google TV home (`com.google.android.apps.tv.launcherx`) is disabled so it
@@ -82,7 +83,7 @@ Hisense SmartTV 4K (lushan), Google TV 12, firmware STT2.230929.001.091. Set up 
 - **Inputs menu**: HDMI 1-3 and Live TV (`com.vt.tv.tvcenter`, hidden from the grid).
 - **Theme**: `themes\christmas` (Santa's sleigh wallpaper, glass dock). Screensaver: the stock Google TV
   backdrop.
-- **Beast button**: on, opening the Mediarium server panel at `http://192.168.1.15:8264/`. See the Beast page
+- **Beast button**: on, opening the Mediarium server panel at `http://xxx.xxx.xxx.15:8264/`. See the Beast page
   section below; it is on in all three rooms.
 - **Weather widget**: on, in place of the date next to the clock (current temperature, condition icon, today's
   high/low). The Wi-Fi and Inputs pills are off (house rule above); Beast and Settings stay. Verified on screen
@@ -91,11 +92,11 @@ Hisense SmartTV 4K (lushan), Google TV 12, firmware STT2.230929.001.091. Set up 
   exactly. See `weather_widget` above.
 - **Kept on by choice**: every streaming app, Google Assistant, Alexa, AirPlay, DLNA, Miracast, firmware updates
   and the screensaver. No ad-blocking DNS.
-- **Backups**: `Jeremys Office\backups\` (before any change, after the old launcher was removed, and a later one).
+- **Backups**: `Office\backups\` (before any change, after the old launcher was removed, and a later one).
 
 **Remote buttons.** Netflix, Input and the mic work. The YouTube, Prime Video, Disney+ and gear buttons did
 nothing once Google TV home was disabled. They can come back with
-`pwsh mytv\build-and-install.ps1 -Room 'Jeremys Office' -HomeKeyService` plus these `app_keys` and
+`pwsh mytv\build-and-install.ps1 -Room 'Office' -HomeKeyService` plus these `app_keys` and
 `settings_key_keycodes` in its `config.xml` (measured on another lushan set): `scan:469:com.google.android.youtube.tv`,
 `scan:468:com.amazon.amazonvideo.livingroom`, `scan:418:com.disney.disneyplus`, and keycode `83` for the gear.
 The trade: while that helper runs, holding Volume up/down moves one step per press instead of ramping.
@@ -137,7 +138,7 @@ onn 4K Pro Streaming Device (jarvis2), Google TV 14, build URO3.260203.035.A1.15
 
 ## LivingRoom TV
 
-onn. Streaming Device 4K pro (SNA), Google TV 14, build URO4.260304.011.B1.15051976, `192.168.1.233`. Set up on
+onn. Streaming Device 4K pro (SNA), Google TV 14, build URO4.260304.011.B1.15051976, `xxx.xxx.xxx.233`. Set up on
 2026-11-03 to match the office, minus the Hisense-only parts (no HDMI inputs or tuner on a streaming box).
 
 - **Dock (5)**: TiviMate, Kick, Netflix, YouTube, Apple TV — the office's dock, except the office now has
@@ -232,7 +233,7 @@ the row shows at once. The account allows 5 streams at once.
 ## Beast page (all rooms)
 
 A **Beast** button in the top bar, next to Inputs, opens the Mediarium media-server panel full-screen at
-`http://192.168.1.15:8264/`. It is the real web panel in a locked-down WebView, so everything the panel can do
+`http://xxx.xxx.xxx.15:8264/`. It is the real web panel in a locked-down WebView, so everything the panel can do
 (search, add, manage downloads) works from the couch.
 
 - **Sign in once.** The first time, sign in with the on-screen keyboard. The session cookie is kept, so later
@@ -251,11 +252,11 @@ Turn it on or off per room in `mytv\<room>\config.xml`, then rebuild that room:
 - `beast_page` (`true`/`false`): shows the Beast button. `true` in all three rooms.
 - `beast_url`: the address it opens. Empty hides the button even when `beast_page` is true.
 
-Because the panel is served over plain HTTP, the host `192.168.1.15` is allowed as a cleartext exception in
+Because the panel is served over plain HTTP, the host `xxx.xxx.xxx.15` is allowed as a cleartext exception in
 `launcher\app\src\main\res\xml\network_security_config.xml`. If the Beast server ever moves, change both
 `beast_url` and that host, then rebuild. Nothing else on the launcher is allowed to use plain HTTP.
 
-The server's API key file `Jeremys Office\beast_key.txt` (git-ignored) is **not** used by this page — the
+The server's API key file `Office\beast_key.txt` (git-ignored) is **not** used by this page — the
 WebView signs in with the web panel instead. It can be kept for other tooling or deleted.
 
 ## Tried and removed: Plex row

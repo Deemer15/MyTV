@@ -22,6 +22,37 @@ nothing here is meant for upstream. The original project's README is kept for re
   high and low, from the TV's own location.
 - **Per-room setups** under [`mytv/`](mytv/README.md): one config, debloat list and set of scripts per TV.
 
+## What is Mediarium (Beast)?
+
+"Beast" is my nickname for **Mediarium**, the self-hosted media server running on my home network. It is the
+source behind both the Movies & Shows rail and the Beast button, and nothing in it leaves the LAN.
+
+What it does:
+
+- **Keeps a download library.** Mediarium manages a library of downloaded movies and shows and serves the files
+  over my home network. The launcher reads that library for the "Local" titles in the rail and plays them in mpv.
+- **Has its own web panel.** Mediarium runs a web dashboard (search, add, and manage downloads) on a port on the
+  server. The launcher's **Beast button** opens that real panel full-screen in a locked-down WebView, so I can
+  drive it from the couch with the remote. The WebView only ever loads that one address; links to anywhere else
+  are refused, so it can't wander onto the open internet.
+- **Feeds the rail alongside IPTV.** The Movies & Shows rail merges Mediarium's downloads with the newest movies
+  from my IPTV provider (read over its Xtream Codes API). When the same title exists in both, the download wins.
+  TMDB fills in the wide backdrops, logos, ratings and overviews.
+
+How the pieces fit:
+
+| Piece | Role |
+|-------|------|
+| Mediarium server ("Beast") | Self-hosted on the LAN: the download library, the file server, and the web panel |
+| Beast button | Opens the Mediarium web panel full-screen in a guarded WebView |
+| Movies & Shows rail | Mediarium downloads (mpv) + IPTV newest movies (Just Player), deduped, art from TMDB |
+| Explore page | A full-screen browser over the same two sources |
+
+The server addresses, the IPTV login and the TMDB key are **not** in this repo: they live in git-ignored
+`*_secrets.xml` files that a fresh clone recreates locally. See
+[`mytv/README.md`](mytv/README.md#secrets-files-git-ignored-recreate-on-a-new-pc) for the exact files and the
+[Beast page notes](mytv/README.md#beast-page-all-rooms) for how the panel behaves on the remote.
+
 ### The Explore page
 
 ![Explore, Movies tab: a full-screen backdrop with the title logo, rating and overview over a poster rail](docs/screenshots/explore.jpg)
@@ -45,7 +76,7 @@ Focusing a show opens its episodes in order as wide stills, each with its own TM
 
 | Room | Device | Features |
 |------|--------|------|
-| Jeremys Office | Hisense SmartTV 4K (lushan), Google TV 12 | Movies & Shows rail, Explore page, Beast button, Weather widget |
+| Office | Hisense SmartTV 4K (lushan), Google TV 12 | Movies & Shows rail, Explore page, Beast button, Weather widget |
 | LivingRoom TV | onn. Streaming Device 4K pro (SNA), Google TV 14 | Movies & Shows rail, Explore page, Beast button, Weather widget |
 | Master Bedroom | onn 4K Pro (jarvis2), Google TV 14 | Movies & Shows rail, Explore page, Beast button, Weather widget |
 
@@ -95,7 +126,7 @@ These stay on my PC on purpose, so a fresh clone will not build the rail until t
   login, the Beast server addresses and API key, and the TMDB API key. The exact files and what each value means
   are in [`mytv/README.md`](mytv/README.md#secrets-files-git-ignored-recreate-on-a-new-pc).
 - `mytv\*\backups\`: package and settings snapshots of each TV, taken before any change.
-- `mytv\Jeremys Office\beast_key.txt`: the Beast server API key.
+- `mytv\Office\beast_key.txt`: the Beast server API key.
 - `tools\adbkey`: the ADB key that the TVs authorised.
 - `shots\`: screenshots, which show the Wi-Fi name.
 
