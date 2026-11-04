@@ -232,9 +232,9 @@ the row shows at once. The account allows 5 streams at once.
 
 ## Beast page (all rooms)
 
-A **Beast** button in the top bar, next to Inputs, opens the Mediarium media-server panel full-screen at
-`http://xxx.xxx.xxx.15:8264/`. It is the real web panel in a locked-down WebView, so everything the panel can do
-(search, add, manage downloads) works from the couch.
+A **Beast** button in the top bar, next to Inputs, opens the [Mediarium](https://mediarium.app/) media-server
+panel full-screen at `http://xxx.xxx.xxx.15:8264/`. It is the real web panel in a locked-down WebView, so
+everything the panel can do (search, add, manage downloads) works from the couch.
 
 - **Sign in once.** The first time, sign in with the on-screen keyboard. The session cookie is kept, so later
   visits open already signed in. If it ever logs you out, just sign in again.

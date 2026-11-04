@@ -24,8 +24,9 @@ nothing here is meant for upstream. The original project's README is kept for re
 
 ## What is Mediarium (Beast)?
 
-"Beast" is my nickname for **Mediarium**, the self-hosted media server running on my home network. It is the
-source behind both the Movies & Shows rail and the Beast button, and nothing in it leaves the LAN.
+"Beast" is my nickname for **[Mediarium](https://mediarium.app/)**, the self-hosted media server running on my
+home network. It is the source behind both the Movies & Shows rail and the Beast button, and nothing in it
+leaves the LAN.
 
 ![Mediarium Dashboard: server CPU, memory and storage, and download status](docs/screenshots/beast-dashboard.jpg)
 
