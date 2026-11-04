@@ -50,6 +50,12 @@ copied over the launcher's on every build. Then run `build-and-install.ps1` for 
   file. Refreshes every 30 minutes while Home is showing. If it can't get a forecast, the date stays. The room
   config must define it (`true`/`false`) or the build fails, because `build-and-install.ps1` copies that file
   over the launcher's.
+- `explore_page`: turns the rail's tab row into Home / Explore. Explore opens a full-screen page with a huge
+  TMDB backdrop, the focused title's logo, rating, year and overview, and a Movies / Shows tab row over one
+  poster rail. Movies are TMDB trending-this-week that the IPTV provider or download library carries, topped up
+  with the newest Local/IPTV movies; Shows are the downloaded series. Focusing a show opens its episodes in
+  order as wide stills, each with its own TMDB name and overview. On in all three rooms. Needs `media_rail` on.
+  Like the others, the room config must define it or that room's build fails.
 - `beast_page`: the Beast button in the top bar (the Mediarium server panel). On in all three rooms; see below.
 - `beast_url`: the address Beast opens. Empty hides the button even when `beast_page` is true.
 

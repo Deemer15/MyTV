@@ -10,9 +10,15 @@ This is a private, personal backup. Nothing here is meant for upstream.
 
 ## What I added on top of upstream
 
-- **Movies & Shows rail** above the dock: a showcase with the selected title, a strip of the next posters, and
-  Explore / Movies / Shows tabs. It merges my Beast (Mediarium) download library, played in mpv, with the IPTV
+- **Movies & Shows rail** above the dock: a showcase with the selected title, a strip of the next posters, and a
+  Home / Explore tab row. It merges my Beast (Mediarium) download library, played in mpv, with the IPTV
   provider's newest movies, played in Just Player. Downloads win over streams when both exist.
+- **Explore page** (the Explore tab on Home): a full-screen cinematic browser with a huge TMDB backdrop and the
+  focused title's logo, rating, year and overview. A Movies / Shows tab row on top; one poster rail below.
+  Movies are TMDB's trending-this-week that my IPTV provider or download library actually carries, topped up
+  with my newest Local/IPTV movies. Shows are my downloaded series. Focusing a show opens its episodes as wide
+  stills in order, each with its own TMDB name and overview; OK plays. Auto-rotates when idle; Back returns.
+  (All three rooms, config key `explore_page`.)
 - **Auto-rotating spotlight** that cross-fades every 10 seconds when idle, also while the spotlight is focused.
   Any key press restarts the 10 seconds.
 - **Wide TMDB backdrops** looked up on demand for the showcased title, and a crisper blurred home backdrop.
@@ -24,11 +30,11 @@ This is a private, personal backup. Nothing here is meant for upstream.
 
 ## My TVs
 
-| Room | Device | Rail |
+| Room | Device | Features |
 |------|--------|------|
-| Jeremys Office | Hisense SmartTV 4K (lushan), Google TV 12 | Movies & Shows, Beast button, Weather widget |
-| LivingRoom TV | onn. Streaming Device 4K pro (SNA), Google TV 14 | Movies & Shows, Beast button, Weather widget |
-| Master Bedroom | onn 4K Pro (jarvis2), Google TV 14 | Movies & Shows, Beast button, Weather widget |
+| Jeremys Office | Hisense SmartTV 4K (lushan), Google TV 12 | Movies & Shows rail, Explore page, Beast button, Weather widget |
+| LivingRoom TV | onn. Streaming Device 4K pro (SNA), Google TV 14 | Movies & Shows rail, Explore page, Beast button, Weather widget |
+| Master Bedroom | onn 4K Pro (jarvis2), Google TV 14 | Movies & Shows rail, Explore page, Beast button, Weather widget |
 
 Addresses, what was disabled and why, remote-button notes and the restore commands are in
 [`mytv/README.md`](mytv/README.md). Each room's folder has its own `config.xml`, `debloat.txt` and the batches

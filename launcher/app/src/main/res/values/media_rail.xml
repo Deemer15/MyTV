@@ -25,8 +25,10 @@
     </string-array>
 
     <string name="media_rail_title" translatable="false">Movies &amp; Shows</string>
-    <!-- Tabs above the showcase: Explore (all), Movies (films), Shows (series). -->
+    <!-- Tabs above the showcase. Without explore_page: Explore (all), Movies (films), Shows (series) filter the
+         rail in place. With explore_page: Home and Explore, where Explore opens the full-screen ExploreActivity. -->
     <string name="media_rail_tab_explore" translatable="false">Explore</string>
+    <string name="media_rail_tab_home" translatable="false">Home</string>
     <string name="media_rail_tab_movies" translatable="false">Movies</string>
     <string name="media_rail_tab_shows" translatable="false">Shows</string>
     <!-- Shown in the showcase when the chosen tab has no items. -->
@@ -58,4 +60,15 @@
     <string name="browse_loading" translatable="false">Loading…</string>
     <string name="browse_downloaded_empty" translatable="false">No downloaded media</string>
     <string name="browse_streaming_empty" translatable="false">No trending titles available right now</string>
+
+    <!-- The full-screen Explore page (ExploreActivity), opened from the Explore tab on Home. A huge backdrop with
+         the focused title's logo, rating, year and overview, over two poster rails (Movies, Shows). -->
+    <string name="explore_row_movies" translatable="false">Movies</string>
+    <string name="explore_row_shows" translatable="false">Shows</string>
+    <string name="explore_type_movie" translatable="false">Movie</string>
+    <string name="explore_type_show" translatable="false">Show</string>
+    <string name="explore_movies_empty" translatable="false">No movies available right now</string>
+    <string name="explore_shows_empty" translatable="false">No downloaded shows yet</string>
+    <string name="explore_episode_n" translatable="false">Episode %1$d</string>
+    <string name="explore_no_episode_overview" translatable="false">No description available.</string>
 </resources>

@@ -172,6 +172,14 @@
             android:excludeFromRecents="true"
             android:screenOrientation="landscape"
             android:theme="@style/Theme.TvHome" />
+        <!-- The full-screen Explore page (config explore_page), opened from the Explore tab on Home: a huge
+             backdrop with the focused title's logo and overview over Movies and Shows poster rails. -->
+        <activity
+            android:name=".ExploreActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.TvHome" />
         <!-- Home button for remotes that send KEYCODE_ALL_APPS (Xiaomi). Opt-in: HOME_KEY_SERVICE=1
              build-and-install.sh; see HomeKeyService. -->
         <service

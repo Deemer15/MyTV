@@ -48,8 +48,20 @@ final class TmdbClient {
      */
     List<TmdbMovie> trendingWeek(int limit) throws IOException {
         List<TmdbMovie> out = new ArrayList<>();
+        // TMDB answers 20 titles a page; ask for more pages only when the caller wants more than one page of them.
+        for (int page = 1; page <= 3 && out.size() < limit; page++) {
+            List<TmdbMovie> got = trendingPage(page, limit - out.size());
+            if (got.isEmpty()) break;
+            out.addAll(got);
+        }
+        return out;
+    }
+
+    private List<TmdbMovie> trendingPage(int page, int limit) throws IOException {
+        List<TmdbMovie> out = new ArrayList<>();
         if (apiKey.isEmpty()) return out;
-        String url = "https://api.themoviedb.org/3/trending/movie/week?api_key=" + Uri.encode(apiKey);
+        String url = "https://api.themoviedb.org/3/trending/movie/week?api_key=" + Uri.encode(apiKey)
+                + "&page=" + page;
         try (Reply reply = open(url)) {
             JsonReader r = reply.json;
             r.beginObject();
@@ -123,6 +135,199 @@ final class TmdbClient {
             r.endObject();
         }
         return null;
+    }
+
+    /** What the Explore banner shows about one title; every field may be empty/0. */
+    static final class Info {
+        final String overview;
+        final double rating;    // TMDB's vote_average out of 10; 0 when unrated
+        final int year;
+        final String backdrop;  // full wide backdrop URL or ""
+        final String logo;      // full title-logo URL or ""
+
+        Info(String overview, double rating, int year, String backdrop, String logo) {
+            this.overview = overview;
+            this.rating = rating;
+            this.year = year;
+            this.backdrop = backdrop;
+            this.logo = logo;
+        }
+    }
+
+    /**
+     * Overview, rating, year, backdrop and title logo for one movie or show, in one details call (logos come with
+     * append_to_response=images). {@code knownId} is TMDB's own id when the title came from TMDB trending; with 0 the
+     * title is searched first. Null with no key or no match. Blocks; run off the main thread.
+     */
+    Info lookup(String title, int year, boolean series, int knownId) throws IOException {
+        if (apiKey.isEmpty()) return null;
+        String kind = series ? "tv" : "movie";
+        int id = knownId > 0 ? knownId : searchId(kind, title, year);
+        if (id <= 0) return null;
+        String url = "https://api.themoviedb.org/3/" + kind + "/" + id + "?api_key=" + Uri.encode(apiKey)
+                + "&append_to_response=images&include_image_language=en,null";
+        String overview = "", date = "", backdrop = "", logo = "";
+        double rating = 0;
+        try (Reply reply = open(url)) {
+            JsonReader r = reply.json;
+            r.beginObject();
+            while (r.hasNext()) {
+                switch (r.nextName()) {
+                    case "overview": overview = string(r).trim(); break;
+                    case "vote_average": rating = parseDouble(string(r)); break;
+                    case "release_date":
+                    case "first_air_date": date = string(r).trim(); break;
+                    case "backdrop_path": backdrop = string(r).trim(); break;
+                    case "images":
+                        if (r.peek() == JsonToken.BEGIN_OBJECT) logo = firstLogo(r); else r.skipValue();
+                        break;
+                    default: r.skipValue();
+                }
+            }
+            r.endObject();
+        }
+        String bd = backdropUrl(backdrop);
+        String lg = logo.isEmpty() ? "" : "https://image.tmdb.org/t/p/w500" + logo;
+        return new Info(overview, rating, yearOf(date), bd == null ? "" : bd, lg);
+    }
+
+    /** The "images" object's best logo path: the first English one, else the first of any language. */
+    private static String firstLogo(JsonReader r) throws IOException {
+        String english = "", any = "";
+        r.beginObject();
+        while (r.hasNext()) {
+            if ("logos".equals(r.nextName()) && r.peek() == JsonToken.BEGIN_ARRAY) {
+                r.beginArray();
+                while (r.hasNext()) {
+                    String path = "", lang = "";
+                    r.beginObject();
+                    while (r.hasNext()) {
+                        switch (r.nextName()) {
+                            case "file_path": path = string(r).trim(); break;
+                            case "iso_639_1": lang = string(r).trim(); break;
+                            default: r.skipValue();
+                        }
+                    }
+                    r.endObject();
+                    if (path.isEmpty()) continue;
+                    if (any.isEmpty()) any = path;
+                    if (english.isEmpty() && "en".equals(lang)) english = path;
+                }
+                r.endArray();
+            } else {
+                r.skipValue();
+            }
+        }
+        r.endObject();
+        return english.isEmpty() ? any : english;
+    }
+
+    /** One episode's TMDB text, keyed by season+episode number so a caller can match it to a library file. */
+    static final class EpisodeInfo {
+        final int season, episode;
+        final String name, overview, still;   // still = full image URL or ""
+
+        EpisodeInfo(int season, int episode, String name, String overview, String still) {
+            this.season = season;
+            this.episode = episode;
+            this.name = name;
+            this.overview = overview;
+            this.still = still;
+        }
+    }
+
+    /**
+     * Every episode of one season of a show, as TMDB lists them: name, overview and still image. {@code showId} is
+     * TMDB's tv id; find it with {@link #searchId}("tv", title, year). Empty list on no key or no match. Blocks; run
+     * off the main thread.
+     */
+    List<EpisodeInfo> season(int showId, int season) throws IOException {
+        List<EpisodeInfo> out = new ArrayList<>();
+        if (apiKey.isEmpty() || showId <= 0) return out;
+        String url = "https://api.themoviedb.org/3/tv/" + showId + "/season/" + season
+                + "?api_key=" + Uri.encode(apiKey);
+        try (Reply reply = open(url)) {
+            JsonReader r = reply.json;
+            r.beginObject();
+            while (r.hasNext()) {
+                if ("episodes".equals(r.nextName()) && r.peek() == JsonToken.BEGIN_ARRAY) {
+                    r.beginArray();
+                    while (r.hasNext()) {
+                        int epNum = 0;
+                        String name = "", overview = "", still = "";
+                        r.beginObject();
+                        while (r.hasNext()) {
+                            switch (r.nextName()) {
+                                case "episode_number": epNum = (int) parseLong(string(r)); break;
+                                case "name": name = string(r).trim(); break;
+                                case "overview": overview = string(r).trim(); break;
+                                case "still_path": still = string(r).trim(); break;
+                                default: r.skipValue();
+                            }
+                        }
+                        r.endObject();
+                        String stillUrl = still.isEmpty() ? "" : "https://image.tmdb.org/t/p/w500" + still;
+                        out.add(new EpisodeInfo(season, epNum, name, overview, stillUrl));
+                    }
+                    r.endArray();
+                } else {
+                    r.skipValue();
+                }
+            }
+            r.endObject();
+        }
+        return out;
+    }
+
+    /** Public search: TMDB's id for the first "tv"/"movie" hit of title (optionally year); 0 for none. */
+    int findId(boolean series, String title, int year) throws IOException {
+        if (apiKey.isEmpty()) return 0;
+        return searchId(series ? "tv" : "movie", title, year);
+    }
+
+    /** TMDB's id for the first search hit, retrying without the year when the year finds nothing; 0 for none. */
+    private int searchId(String kind, String title, int year) throws IOException {
+        if (title == null || title.trim().isEmpty()) return 0;
+        int id = year > 0 ? searchOnce(kind, title, year) : 0;
+        return id > 0 ? id : searchOnce(kind, title, 0);
+    }
+
+    private int searchOnce(String kind, String title, int year) throws IOException {
+        String url = "https://api.themoviedb.org/3/search/" + kind + "?api_key=" + Uri.encode(apiKey)
+                + "&query=" + Uri.encode(title.trim()) + "&include_adult=false";
+        if (year > 0) url += (kind.equals("tv") ? "&first_air_date_year=" : "&year=") + year;
+        try (Reply reply = open(url)) {
+            JsonReader r = reply.json;
+            int found = 0;
+            r.beginObject();
+            while (r.hasNext()) {
+                if ("results".equals(r.nextName()) && r.peek() == JsonToken.BEGIN_ARRAY) {
+                    r.beginArray();
+                    while (r.hasNext()) {
+                        int id = 0;
+                        r.beginObject();
+                        while (r.hasNext()) {
+                            if ("id".equals(r.nextName())) id = (int) parseLong(string(r)); else r.skipValue();
+                        }
+                        r.endObject();
+                        if (found == 0 && id > 0) found = id;   // keep reading: the stream must be consumed
+                    }
+                    r.endArray();
+                } else {
+                    r.skipValue();
+                }
+            }
+            r.endObject();
+            return found;
+        }
+    }
+
+    private static double parseDouble(String s) {
+        try {
+            return Double.parseDouble(s.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     /** The year from a "YYYY-MM-DD" release date, or 0 when it is absent or unparseable. */

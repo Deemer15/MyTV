@@ -134,7 +134,11 @@ final class MediaRail {
 
     private final LinearLayout container;
     private final LinearLayout tabRow;       // Explore / Movies / Shows, above the showcase (replaces the old header)
-    private final TextView[] tabs = new TextView[3];
+    private final TextView[] tabs;
+    /** config explore_page: when true the tabs are Home / Explore (Explore opens ExploreActivity), and the rail
+     *  itself never filters — it stays the full merged list. When false the old Explore / Movies / Shows tabs
+     *  filter the rail in place. */
+    private final boolean explorePage;
     private Filter filter = Filter.ALL;
     /** The full merged list from the sources; the adapter holds only the current filter's subset. */
     private List<MediaItem> allItems = new ArrayList<>();
@@ -219,6 +223,7 @@ final class MediaRail {
         limit = Math.max(1, Math.min(60, res.getInteger(R.integer.media_rail_count)));
         sourceCount = Math.max(limit, Math.min(60, res.getInteger(R.integer.media_rail_source_count)));
         skipCategories = Arrays.asList(res.getStringArray(R.array.media_rail_skip_categories));
+        explorePage = res.getBoolean(R.bool.explore_page);
         badgeDownload = res.getString(R.string.media_rail_badge_download);
         badgeStream = res.getString(R.string.media_rail_badge_stream);
         cacheFile = new AtomicFile(new File(context.getFilesDir(), "media_rail.tsv"));
@@ -245,7 +250,10 @@ final class MediaRail {
         tabRow.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);   // the row itself takes focus, not a child
         tabRow.setOnKeyListener((v, keyCode, event) -> onTabKey(keyCode, event));
         tabRow.setOnFocusChangeListener((v, focused) -> { paintTabs(focused); rescheduleRotation(); });
-        int[] labels = {R.string.media_rail_tab_explore, R.string.media_rail_tab_movies, R.string.media_rail_tab_shows};
+        int[] labels = explorePage
+                ? new int[] {R.string.media_rail_tab_home, R.string.media_rail_tab_explore}
+                : new int[] {R.string.media_rail_tab_explore, R.string.media_rail_tab_movies, R.string.media_rail_tab_shows};
+        tabs = new TextView[labels.length];
         for (int i = 0; i < tabs.length; i++) {
             TextView t = new TextView(context);
             t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
@@ -437,6 +445,7 @@ final class MediaRail {
     boolean restoreFocusIfRequested() {
         if (!wantsFocusOnResume || released) return false;
         wantsFocusOnResume = false;
+        if (explorePage) paintExploreTab(false);   // returning from Explore: Home is the selected tab again
         if (itemCount() == 0) return false;
         // Force the rail visible: the user is returning to it, so the grid is at the top for our purposes.
         gridAtTop = true;
@@ -493,7 +502,14 @@ final class MediaRail {
     void focus() {
         if (itemCount() == 0) return;
         container.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
-        showcase.requestFocus();
+        // With the Home/Explore tabs, land on the tab row (Home) by default, not the showcase; the user drops into
+        // the rail with Down. Without explore_page the showcase is the primary control, so focus it as before.
+        if (explorePage) {
+            paintTabs(true);
+            tabRow.requestFocus();
+        } else {
+            showcase.requestFocus();
+        }
     }
 
     /** Number of real media items (not counting the Show-more state). */
@@ -550,6 +566,14 @@ final class MediaRail {
         }
         boolean rtl = tabRow.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
         switch (keyCode) {
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_ENTER:
+                // In two-tab mode, OK on the row opens Explore (the row shows Home / Explore and never filters).
+                if (explorePage) {
+                    openExplore();
+                    return true;
+                }
+                return false;
             case KeyEvent.KEYCODE_DPAD_LEFT:
                 return moveTab(rtl ? +1 : -1);
             case KeyEvent.KEYCODE_DPAD_RIGHT:
@@ -570,6 +594,17 @@ final class MediaRail {
 
     /** Moves the tab selection by delta (clamped), applies the new filter, and repaints the row. */
     private boolean moveTab(int delta) {
+        if (explorePage) {
+            // Two tabs: Home (0) and Explore (1). Right from Home opens the Explore page; the tab stays Home so
+            // returning from Explore lands back on an unchanged Home.
+            if (delta > 0) {
+                paintExploreTab(true);
+                openExplore();
+            } else {
+                paintExploreTab(false);
+            }
+            return true;
+        }
         int next = Math.max(0, Math.min(tabs.length - 1, filter.ordinal() + delta));
         if (next == filter.ordinal()) return true;   // at an end: swallow so focus never escapes sideways
         filter = Filter.values()[next];
@@ -580,6 +615,25 @@ final class MediaRail {
         updateVisibility();
         rescheduleRotation();                          // the new filter may have a different item count
         return true;
+    }
+
+    /** In two-tab mode, briefly highlight the Explore tab (true) or restore Home as selected (false). */
+    private void paintExploreTab(boolean exploreActive) {
+        if (tabs.length < 2) return;
+        tabs[0].setTextColor(exploreActive ? 0x80FFFFFF : Color.WHITE);
+        tabs[1].setTextColor(exploreActive ? Color.WHITE : 0x80FFFFFF);
+    }
+
+    /** Opens the full-screen Explore page; returning from it lands back on the showcase. */
+    private void openExplore() {
+        wantsFocusOnResume = true;
+        try {
+            Intent i = new Intent(context, ExploreActivity.class);
+            if (!(context instanceof android.app.Activity)) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(i);
+        } catch (ActivityNotFoundException | SecurityException e) {
+            Toast.makeText(context, R.string.media_rail_no_player, Toast.LENGTH_SHORT).show();
+        }
     }
 
     /** Highlights the selected tab (bright, or accent-underlined while the row holds focus) and dims the rest. */
