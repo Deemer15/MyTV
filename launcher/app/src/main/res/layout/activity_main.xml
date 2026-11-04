@@ -304,6 +304,42 @@
                             android:letterSpacing="0.14"
                             android:textAllCaps="true" />
 
+                        <!-- Weather widget (config weather_widget): replaces the date once the first forecast arrives. -->
+                        <LinearLayout
+                            android:id="@+id/weatherBlock"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <com.gathin.tvhome.WeatherIconView
+                                android:id="@+id/weatherIcon"
+                                android:layout_width="34dp"
+                                android:layout_height="34dp" />
+
+                            <TextView
+                                android:id="@+id/weatherTemp"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="8dp"
+                                android:textColor="#FFFFFFFF"
+                                android:textSize="26sp"
+                                android:fontFamily="@string/font_regular"
+                                android:includeFontPadding="false" />
+
+                            <TextView
+                                android:id="@+id/weatherRange"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="12dp"
+                                android:textColor="#A6FFFFFF"
+                                android:textSize="14sp"
+                                android:fontFamily="@string/font_regular"
+                                android:letterSpacing="0.1"
+                                android:includeFontPadding="false" />
+                        </LinearLayout>
+
                         <!-- Lunar date ("Lunar 13/9 · Year of the Horse"), shown when lunar_date is on. -->
                         <TextView
                             android:id="@+id/lunarDate"

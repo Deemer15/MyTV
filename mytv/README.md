@@ -40,6 +40,13 @@ copied over the launcher's on every build. Then run `build-and-install.ps1` for 
 - `hidden_apps`: apps never shown as tiles (they stay installed and open from Settings > Apps).
 - `columns`: dock slots and grid columns, 4 to 7. Tiles shrink from 5 up.
 - `show_inputs_pill`: the Inputs button in the top bar.
+- `show_network_pill`: the Wi-Fi button in the top bar. Off in the office to make room for the weather.
+- `weather_widget`: replaces the date next to the clock with a weather widget: current temperature (Fahrenheit),
+  a condition icon and today's high and low. The data comes from Open-Meteo over HTTPS (no account or key); the
+  place is the TV's own last known location, rounded to about 1 km, else `latitude` and `longitude` from the same
+  file. Refreshes every 30 minutes while Home is showing. If it can't get a forecast, the date stays. The room
+  config must define it (`true`/`false`) or the build fails, because `build-and-install.ps1` copies that file
+  over the launcher's.
 - `beast_page`: the Beast button in the top bar (the Mediarium server panel). On in all three rooms; see below.
 - `beast_url`: the address Beast opens. Empty hides the button even when `beast_page` is true.
 
@@ -68,6 +75,11 @@ Hisense SmartTV 4K (lushan), Google TV 12, firmware STT2.230929.001.091. Set up 
   backdrop.
 - **Beast button**: on, opening the Mediarium server panel at `http://192.168.1.15:8264/`. See the Beast page
   section below; it is on in all three rooms.
+- **Weather widget**: on, in place of the date next to the clock (current temperature, condition icon, today's
+  high/low). The Wi-Fi pill is off here to make room for it; Inputs and Beast stay. Verified on screen
+  2026-11-04 against Open-Meteo's own answer for the same place (51°F shown vs. 50.5°F/cloud cover 98% from the
+  API at that moment); a second source (wttr.in) said 55°F at the same time, so don't expect sources to agree
+  exactly. See `weather_widget` above.
 - **Kept on by choice**: every streaming app, Google Assistant, Alexa, AirPlay, DLNA, Miracast, firmware updates
   and the screensaver. No ad-blocking DNS.
 - **Backups**: `Jeremys Office\backups\` (before any change, after the old launcher was removed, and a later one).
@@ -109,6 +121,8 @@ onn 4K Pro Streaming Device (jarvis2), Google TV 14, build URO3.260203.035.A1.15
 - **No Inputs button**: a streaming box has no HDMI inputs or tuner, so `show_inputs_pill` is off and
   `live_tv_package` is empty.
 - **Theme**: `themes\christmas`, same as the office.
+- **Weather widget**: on, in place of the date next to the clock, same as the office. Dock screenshot-verified
+  2026-11-04. The Wi-Fi pill stays on here (only the office traded it for the widget's room).
 - **Closing ADB on this box**: USB debugging alone opens port 5555 here, so both USB debugging and network
   debugging have to go off.
 
@@ -131,8 +145,8 @@ onn. Streaming Device 4K pro (SNA), Google TV 14, build URO4.260304.011.B1.15051
   is safe here. Re-enable it before a factory reset:
   `pwsh mytv\restore.ps1 -Room 'LivingRoom TV' -Package com.google.android.tungsten.setupwraith`.
 - **Backups**: `LivingRoom TV\backups\before\` (taken before any change).
-- **Not done yet**: network ADB is still open. Switch USB debugging and Network debugging off on the TV, revoke
-  authorisations, then check with `tools\adb-closed.py 192.168.1.233`.
+- **Weather widget**: on, in place of the date next to the clock, same as the office.
+- **Network ADB**: left open on purpose, same as the other two rooms; not a pending task.
 
 ## Secrets files (git-ignored, recreate on a new PC)
 

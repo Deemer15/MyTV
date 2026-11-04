@@ -15,6 +15,8 @@ This is a private, personal backup. Nothing here is meant for upstream.
   Any key press restarts the 10 seconds.
 - **Wide TMDB backdrops** looked up on demand for the showcased title, and a crisper blurred home backdrop.
 - **Beast button** in the top bar that opens the Mediarium panel full-screen (all three rooms).
+- **Weather widget** in place of the date next to the clock: current temperature, a condition icon, today's
+  high/low, from the TV's own location (all three rooms).
 - **Per-room setups** under [`mytv/`](mytv/README.md): one config, debloat list and set of scripts per TV.
 - A "Show more" browse screen with the downloaded library and TMDB trending titles that the IPTV provider carries.
 
@@ -22,9 +24,9 @@ This is a private, personal backup. Nothing here is meant for upstream.
 
 | Room | Device | Rail |
 |------|--------|------|
-| Jeremys Office | Hisense SmartTV 4K (lushan), Google TV 12 | Movies & Shows, Beast button, Inputs pill |
-| LivingRoom TV | onn. Streaming Device 4K pro (SNA), Google TV 14 | Movies & Shows, Beast button |
-| Master Bedroom | onn 4K Pro (jarvis2), Google TV 14 | Movies & Shows, Beast button |
+| Jeremys Office | Hisense SmartTV 4K (lushan), Google TV 12 | Movies & Shows, Beast button, Inputs pill, Weather widget |
+| LivingRoom TV | onn. Streaming Device 4K pro (SNA), Google TV 14 | Movies & Shows, Beast button, Weather widget |
+| Master Bedroom | onn 4K Pro (jarvis2), Google TV 14 | Movies & Shows, Beast button, Weather widget |
 
 Addresses, what was disabled and why, remote-button notes and the restore commands are in
 [`mytv/README.md`](mytv/README.md). Each room's folder has its own `config.xml`, `debloat.txt` and the batches

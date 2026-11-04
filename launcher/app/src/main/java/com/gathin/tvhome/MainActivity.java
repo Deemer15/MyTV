@@ -455,6 +455,60 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     };
     /** Keeps the Home clocks moving on Android before 12 when the firmware stops ACTION_TIME_TICK (see ClockRefresh). */
     private ClockRefresh clockRefresh;
+
+    /** config weather_widget: the forecast in place of the date; null views when the layout has no widget. */
+    private boolean weatherOn;
+    private View weatherBlock;
+    private WeatherIconView weatherIcon;
+    private TextView weatherTemp, weatherRange;
+    private WeatherClient.Weather weather;
+    private boolean weatherFetching;
+    private static final long WEATHER_REFRESH_MS = 30 * 60 * 1000L, WEATHER_RETRY_MS = 5 * 60 * 1000L;
+    private final Runnable weatherTick = this::refreshWeather;
+
+    /** The date stays until the first forecast arrives, then the widget takes its place; a failure keeps the date. */
+    private void setUpWeather() {
+        weatherBlock = findViewById(R.id.weatherBlock);
+        weatherIcon = findViewById(R.id.weatherIcon);
+        weatherTemp = findViewById(R.id.weatherTemp);
+        weatherRange = findViewById(R.id.weatherRange);
+        weatherOn = getResources().getBoolean(R.bool.weather_widget) && weatherBlock != null;
+    }
+
+    private void applyWeather(WeatherClient.Weather w) {
+        weather = w;
+        weatherIcon.set(w.kind, w.night);
+        weatherTemp.setText(w.temp + "\u00B0F");
+        weatherRange.setText("H " + w.high + "\u00B0   L " + w.low + "\u00B0");
+        weatherBlock.setVisibility(View.VISIBLE);
+        findViewById(R.id.date).setVisibility(View.GONE);
+    }
+
+    private void refreshWeather() {
+        handler.removeCallbacks(weatherTick);
+        if (!weatherOn || !started) return;
+        if (weather != null && System.currentTimeMillis() - weather.fetchedAt < WEATHER_REFRESH_MS - 60_000L) {
+            handler.postDelayed(weatherTick, WEATHER_REFRESH_MS);   // fresh enough, e.g. back from an app
+            return;
+        }
+        if (weatherFetching) return;
+        weatherFetching = true;
+        final android.content.Context app = getApplicationContext();
+        new Thread(() -> {
+            WeatherClient.Weather w = null;
+            try {
+                w = WeatherClient.fetch(app);
+            } catch (java.io.IOException | RuntimeException ignored) {
+                // offline or the service is down: keep what shows and try again soon
+            }
+            final WeatherClient.Weather result = w;
+            handler.post(() -> {
+                weatherFetching = false;
+                if (result != null) applyWeather(result);
+                if (started) handler.postDelayed(weatherTick, result != null ? WEATHER_REFRESH_MS : WEATHER_RETRY_MS);
+            });
+        }, "weather").start();
+    }
     private final Runnable minuteTick = new Runnable() {
         @Override
         public void run() {
@@ -627,6 +681,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             lunarDate.setTextSize(11f);
             date.setPadding(0, (int) (4 * density), 0, 0);
         }
+        setUpWeather();
         vpnApp = cfg.vpnApp;
         vpnPill = cfg.vpnPill && !cfg.topMenu;
         btnVpn = findViewById(R.id.btnVpn);
@@ -1199,6 +1254,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         updateClockVisibility();
         clockRefresh.start();   // with timeReceiver: while Home is visible, paused or not
         tileRefresh.onStart();
+        refreshWeather();
     }
 
     @Override
@@ -1474,6 +1530,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         unregisterReceiver(timeReceiver);
         clockRefresh.stop();
         handler.removeCallbacks(clockCheck);
+        handler.removeCallbacks(weatherTick);
         stopped = true;
         tileRefresh.onStop();
     }
