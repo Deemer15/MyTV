@@ -363,10 +363,10 @@
     <bool name="iptv_rail">false</bool>
 
     <bool name="show_inputs_pill">false</bool>
-    <!-- Weather widget in place of the date (WeatherClient): temperature, icon, today's high/low in F, from Open-Meteo. Off by default; each room's config.xml sets it. -->
-    <bool name="weather_widget">false</bool>
-    <!-- Explore page (ExploreActivity): the rail's tab row becomes Home / Explore; Explore opens a full-screen backdrop with the focused title's logo and overview, and a Movies / Shows rail. Off by default; each room's config.xml sets it. -->
-    <bool name="explore_page">false</bool>
+    <!-- Weather widget in place of the date (WeatherClient): temperature, icon, today's high/low in F, from Open-Meteo. On in every room. -->
+    <bool name="weather_widget">true</bool>
+    <!-- Explore page (ExploreActivity): the rail's tab row becomes Home / Explore; Explore opens a full-screen backdrop with the focused title's logo and overview, and a Movies / Shows rail. On in every room. -->
+    <bool name="explore_page">true</bool>
     <!-- The Inputs list shows only HDMI ports and CEC devices that report connected. Empty ports, devices asleep in
          standby (some TVs, TCL among them, report an empty HDMI port as connected-standby, the same state a
          sleeping device has) and the AV jacks fold behind a "More inputs" row that expands the rest. An HDMI row
