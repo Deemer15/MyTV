@@ -689,13 +689,12 @@ final class MediaRail {
 
     /** True only when it makes sense to auto-advance: the launcher is in front, the rail is shown, no picker is up,
      *  and the current filter has at least two items to cycle between. Rotation runs even while the showcase holds
-     *  focus (a parked spotlight keeps cycling), but any keypress there resets the dwell via rescheduleRotation(),
-     *  so it never advances out from under someone who is actively pressing keys. It still pauses on the tab row —
-     *  rotating the hidden selection while the user is picking a filter would serve no one. */
+     *  focus (a parked spotlight keeps cycling) and while the tab row holds focus (the showcase still rotates under
+     *  the Home/Explore tabs) — rotation only swaps the showed item, never moving focus — but any keypress resets
+     *  the dwell via rescheduleRotation(), so it never advances out from under someone actively pressing keys. */
     private boolean canRotate() {
         return resumed && !released
                 && container.getVisibility() == View.VISIBLE && gridAtTop && placed
-                && !tabRow.isFocused()
                 && picker == null
                 && itemCount() >= 2;
     }

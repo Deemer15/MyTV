@@ -106,6 +106,7 @@ public class ExploreActivity extends Activity {
 
     private boolean resumed;
     private long idleMs;
+    private int bannerPos;   // the rail index the banner currently shows (drives rotation while a tab is focused)
     private final Runnable beat = this::rotateBeat;
 
     @Override
@@ -263,6 +264,7 @@ public class ExploreActivity extends Activity {
         Tab next = delta < 0 ? Tab.MOVIES : Tab.SHOWS;
         if (next == tab) return true;
         tab = next;
+        bannerPos = 0;
         paintTabs();
         leaveEpisodeMode(false);
         titleRail.setItems(tab == Tab.MOVIES ? movieItems : showItems,
@@ -524,6 +526,7 @@ public class ExploreActivity extends Activity {
     private void enterEpisodeMode(MediaItem show) {
         if (show == null || !show.isSeries || show.episodes == null || show.episodes.isEmpty()) return;
         episodeMode = true;
+        bannerPos = 0;
         episodeShow = orderedEpisodes(show);
         episodeRail.setEpisodes(episodeShow);
         titleRail.view.animate().alpha(0f).setDuration(140).withEndAction(() ->
@@ -563,6 +566,7 @@ public class ExploreActivity extends Activity {
         if (!episodeMode) return;
         episodeMode = false;
         episodeShow = null;
+        bannerPos = 0;
         episodeRail.view.animate().alpha(0f).setDuration(140).withEndAction(() -> {
             episodeRail.view.setVisibility(View.GONE);
             episodeRail.view.setAlpha(1f);
@@ -817,6 +821,7 @@ public class ExploreActivity extends Activity {
         } else if (pos < titleRail.adapter.items.size()) {
             showFeatured(titleRail.itemAt(pos));
         }
+        bannerPos = pos;
         rescheduleRotation();
     }
 
@@ -917,29 +922,50 @@ public class ExploreActivity extends Activity {
 
     private boolean canRotate() {
         Rail rail = episodeMode ? episodeRail : titleRail;
-        return resumed && rail.hasItems() && rail.adapter.getItemCount() >= 2
-                && !tabRow.isFocused();
+        return resumed && rail.hasItems() && rail.adapter.getItemCount() >= 2;
     }
 
     private void advance() {
         Rail rail = episodeMode ? episodeRail : titleRail;
         int n = rail.adapter.getItemCount();
         if (n < 2) return;
-        View focused = rail.row.findFocus();
-        int pos = 0;
-        if (focused != null) {
-            RecyclerView.ViewHolder vh = rail.row.findContainingViewHolder(focused);
-            if (vh != null) pos = vh.getBindingAdapterPosition();
+        // When a tab holds focus, rotate the banner/rail WITHOUT moving focus off the tab; when a card holds focus,
+        // move the focus along so the ring follows the rotation.
+        boolean tabFocused = tabRow.isFocused();
+        int pos = bannerPos;
+        if (!tabFocused) {
+            View focused = rail.row.findFocus();
+            if (focused != null) {
+                RecyclerView.ViewHolder vh = rail.row.findContainingViewHolder(focused);
+                if (vh != null) pos = vh.getBindingAdapterPosition();
+            }
         }
-        int next = (pos + 1) % n;
+        int next = ((pos % n) + 1) % n;
+        bannerPos = next;
         railStack.animate().alpha(0f).setDuration(FADE_MS).withEndAction(() -> {
             rail.row.scrollToPosition(next);
-            rail.row.post(() -> {
-                RecyclerView.ViewHolder vh = rail.row.findViewHolderForAdapterPosition(next);
-                if (vh != null) vh.itemView.requestFocus();
-            });
+            if (tabFocused) {
+                bindRotated(rail, next);
+            } else {
+                rail.row.post(() -> {
+                    RecyclerView.ViewHolder vh = rail.row.findViewHolderForAdapterPosition(next);
+                    if (vh != null) vh.itemView.requestFocus();
+                });
+            }
             railStack.animate().alpha(1f).setDuration(FADE_MS).start();
         }).start();
+    }
+
+    /** Updates the banner for the rotated item without taking focus (used while a tab holds focus). */
+    private void bindRotated(Rail rail, int pos) {
+        if (episodeMode && episodeShow != null) {
+            if (pos < episodeShow.episodes.size()) {
+                showEpisode(episodeShow, episodeShow.episodes.get(pos),
+                        episodeInfoFor(episodeShow, episodeShow.episodes.get(pos)));
+            }
+        } else if (pos < rail.adapter.items.size()) {
+            showFeatured(rail.itemAt(pos));
+        }
     }
 
     private void rescheduleRotation() {
