@@ -6,6 +6,8 @@ unused system services are disabled (never uninstalled). The original project's 
 
 This is a private, personal backup. Nothing here is meant for upstream.
 
+![The MyTV home screen: clock with the weather, Beast and Settings buttons, the Movies & Shows rail and the dock](docs/mytv/home.jpg)
+
 ## What I added on top of upstream
 
 - **Movies & Shows rail** above the dock: a showcase with the selected title, a strip of the next posters, and
