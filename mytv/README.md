@@ -40,7 +40,10 @@ copied over the launcher's on every build. Then run `build-and-install.ps1` for 
 - `hidden_apps`: apps never shown as tiles (they stay installed and open from Settings > Apps).
 - `columns`: dock slots and grid columns, 4 to 7. Tiles shrink from 5 up.
 - `show_inputs_pill`: the Inputs button in the top bar.
-- `show_network_pill`: the Wi-Fi button in the top bar. Off in the office to make room for the weather.
+- `show_network_pill`: the Wi-Fi button in the top bar.
+- **House rule: the top bar is Beast and Settings only, on every TV, current and future.** `show_network_pill` and
+  `show_inputs_pill` are `false` in all three rooms. A new room copies the office `config.xml`, which already has
+  both off; keep them off. The remote's Input button still opens the Inputs list on a TV that has inputs.
 - `weather_widget`: replaces the date next to the clock with a weather widget: current temperature (Fahrenheit),
   a condition icon and today's high and low. The data comes from Open-Meteo over HTTPS (no account or key); the
   place is the TV's own last known location, rounded to about 1 km, else `latitude` and `longitude` from the same
@@ -76,7 +79,7 @@ Hisense SmartTV 4K (lushan), Google TV 12, firmware STT2.230929.001.091. Set up 
 - **Beast button**: on, opening the Mediarium server panel at `http://192.168.1.15:8264/`. See the Beast page
   section below; it is on in all three rooms.
 - **Weather widget**: on, in place of the date next to the clock (current temperature, condition icon, today's
-  high/low). The Wi-Fi pill is off here to make room for it; Inputs and Beast stay. Verified on screen
+  high/low). The Wi-Fi and Inputs pills are off (house rule above); Beast and Settings stay. Verified on screen
   2026-11-04 against Open-Meteo's own answer for the same place (51°F shown vs. 50.5°F/cloud cover 98% from the
   API at that moment); a second source (wttr.in) said 55°F at the same time, so don't expect sources to agree
   exactly. See `weather_widget` above.
@@ -122,7 +125,7 @@ onn 4K Pro Streaming Device (jarvis2), Google TV 14, build URO3.260203.035.A1.15
   `live_tv_package` is empty.
 - **Theme**: `themes\christmas`, same as the office.
 - **Weather widget**: on, in place of the date next to the clock, same as the office. Dock screenshot-verified
-  2026-11-04. The Wi-Fi pill stays on here (only the office traded it for the widget's room).
+  2026-11-04. The Wi-Fi pill is off here too (house rule above).
 - **Closing ADB on this box**: USB debugging alone opens port 5555 here, so both USB debugging and network
   debugging have to go off.
 

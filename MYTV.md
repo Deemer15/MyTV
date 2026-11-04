@@ -24,7 +24,7 @@ This is a private, personal backup. Nothing here is meant for upstream.
 
 | Room | Device | Rail |
 |------|--------|------|
-| Jeremys Office | Hisense SmartTV 4K (lushan), Google TV 12 | Movies & Shows, Beast button, Inputs pill, Weather widget |
+| Jeremys Office | Hisense SmartTV 4K (lushan), Google TV 12 | Movies & Shows, Beast button, Weather widget |
 | LivingRoom TV | onn. Streaming Device 4K pro (SNA), Google TV 14 | Movies & Shows, Beast button, Weather widget |
 | Master Bedroom | onn 4K Pro (jarvis2), Google TV 14 | Movies & Shows, Beast button, Weather widget |
 
@@ -55,7 +55,8 @@ the launcher's on every build, so the launcher's copy always shows the last room
 2. Back it up first with `backup.ps1`. Check `dumpsys wifi | grep -o 'cname=[^ ]*'` before disabling the setup
    wizard: if it owns the saved Wi-Fi network, disabling it drops the TV off Wi-Fi.
 3. Copy the office `config.xml` into the new room's folder and change what the hardware needs (a streaming box
-   has no Live TV app or HDMI inputs, so no Inputs pill).
+   has no Live TV app or HDMI inputs). Keep the top bar to Beast and Settings: `show_network_pill` and
+   `show_inputs_pill` stay `false` in every room.
 4. Disable the debloat batches one at a time with a screenshot between them, setup wizard last.
 5. Install mpv and Just Player if the room uses the rail, then run `build-and-install.ps1`.
 6. Push the theme, reboot once, and compare `pm list packages -d` before and after.
