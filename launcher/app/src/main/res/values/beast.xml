@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Text for the Beast page (BeastActivity). Its on/off switch and address are beast_page and beast_url in
+     config.xml, set per room in mytv\<room>\config.xml. -->
+<resources>
+    <string name="beast_button" translatable="false">Beast</string>
+    <string name="beast_unreachable" translatable="false">Can\'t reach the Beast at %1$s. Is the server on?</string>
+</resources>

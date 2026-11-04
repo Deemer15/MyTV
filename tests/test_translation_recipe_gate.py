@@ -25,7 +25,7 @@ CI = ROOT / ".github/workflows/ci.yml"
 
 # The launcher job's size check, in the form ci.yml writes it:
 #   size=$(stat -c %s launcher/app/build/outputs/apk/release/app-release.apk)
-#   test "$size" -lt 589824
+#   test "$size" -lt 786432
 STAT_LINE = re.compile(r"size=\$\(stat -c %s ([^)\s]+)\)")
 LIMIT_LINE = re.compile(r'test "\$size" -lt (\d+)')
 JOB_HEAD = re.compile(r"^  ([a-z][a-z0-9-]*):\s*$", re.M)
@@ -105,7 +105,7 @@ class TranslationRecipeGateTest(unittest.TestCase):
         ci = CI.read_text(encoding="utf-8")
         apk, limit = gate(ci)
         self.assertEqual("launcher/app/build/outputs/apk/release/app-release.apk", apk)
-        self.assertEqual(589824, limit)
+        self.assertEqual(786432, limit)
         self.assertTrue(runs_on_pull_requests(ci),
                         "ci.yml's launcher job no longer runs on a pull request, so a translation PR "
                         "would not meet the gate docs/workflows/translation.md now points at")

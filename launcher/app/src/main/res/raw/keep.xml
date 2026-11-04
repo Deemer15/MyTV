@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- app_banners names drawables at run time, which resource shrinking cannot see: keep every banner_*. -->
+<!--
+  Resources named at run time, which resource shrinking cannot see statically:
+    - app_banners names drawables (AppAdapter.bundledBanner): keep every banner_*.
+    - the Beast/IPTV/TMDB secrets are read by name (MediaRail/IptvRail/BrowseActivity.secret via
+      Resources.getIdentifier(name,"string",...)); keep those exact string names.
+  shrinkMode "strict" is required: the default "safe" mode, on seeing getIdentifier(...,"string",...),
+  keeps every string across every locale, which bloats resources.arsc past the APK size gate. Strict mode
+  removes unused resources as before and keeps only what R references statically plus this list.
+-->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@drawable/banner_*" />
+    tools:shrinkMode="strict"
+    tools:keep="@drawable/banner_*,@string/beast_api_base,@string/beast_api_key,@string/beast_library_root,@string/beast_media_base,@string/iptv_server,@string/iptv_username,@string/iptv_password,@string/tmdb_api_key" />

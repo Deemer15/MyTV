@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  "Latest movies" rail between the top bar and the dock (IptvRail.java): the newest movies from an IPTV provider's
+  Xtream Codes API, the same login TiviMate uses. OK plays a movie in the player below.
+
+  The login goes in res/values/iptv_secrets.xml, which git ignores (format in mytv\README.md). Without that file, or with iptv_rail false, there is no rail.
+-->
+<resources>
+    <!-- iptv_rail (on/off) is declared per room in mytv\<room>\config.xml so it can differ by TV. -->
+    <!-- How many movies, newest first. -->
+    <integer name="iptv_rail_count">20</integer>
+    <!-- Category names to leave out, exactly as the provider names them. -->
+    <string-array name="iptv_rail_skip_categories" translatable="false">
+    </string-array>
+    <!-- The app that plays a movie; empty asks Android for any video player. -->
+    <string name="iptv_rail_player" translatable="false">com.brouken.player</string>
+
+    <string name="iptv_rail_title" translatable="false">Streaming Movies</string>
+    <string name="iptv_rail_added_today" translatable="false">added today</string>
+    <string name="iptv_rail_added_yesterday" translatable="false">added yesterday</string>
+    <string name="iptv_rail_added_days" translatable="false">added %1$d days ago</string>
+    <string name="iptv_rail_no_player" translatable="false">Install Just Player to play movies from this row</string>
+</resources>

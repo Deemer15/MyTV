@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  "Media" rail between the top bar and the dock (MediaRail.java): one deduplicated row merging the Beast download
+  library (played by mpv) and the IPTV provider's newest movies (played by Just Player). When the same title is in
+  both, the 4K download wins and the stream is hidden. Each poster carries a small source badge.
+
+  Sources and logins live in the git-ignored res/values/beast_secrets.xml (Beast server + API key) and
+  res/values/iptv_secrets.xml (Xtream Codes login). With media_rail false, or with neither source configured,
+  there is no rail. Office only.
+-->
+<resources>
+    <!-- media_rail (on/off) is declared per room in mytv\<room>\config.xml so it can differ by TV. -->
+    <!-- How many items in the merged row, newest first (after dedup). -->
+    <integer name="media_rail_count">30</integer>
+    <!-- How many to ask each source for before merging (a source may lose items to dedup, so ask for more). -->
+    <integer name="media_rail_source_count">30</integer>
+
+    <!-- Players, by source. Empty asks Android for any video player. mpv for downloads (handles Dolby Vision
+         profile 7 the TV's ExoPlayer cannot); Just Player for IPTV streams. -->
+    <string name="media_rail_download_player" translatable="false">is.xyz.mpv</string>
+    <string name="media_rail_stream_player" translatable="false">com.brouken.player</string>
+
+    <!-- IPTV category names to leave out of the stream source, exactly as the provider names them. -->
+    <string-array name="media_rail_skip_categories" translatable="false">
+    </string-array>
+
+    <string name="media_rail_title" translatable="false">Movies &amp; Shows</string>
+    <string name="media_rail_badge_download" translatable="false">DL</string>
+    <string name="media_rail_badge_stream" translatable="false">Stream</string>
+    <string name="media_rail_added_today" translatable="false">added today</string>
+    <string name="media_rail_added_yesterday" translatable="false">added yesterday</string>
+    <string name="media_rail_added_days" translatable="false">added %1$d days ago</string>
+    <string name="media_rail_no_player" translatable="false">No video player installed for this item</string>
+
+    <!-- The final tile of the row opens the full browse view (Tier 2). -->
+    <string name="media_rail_show_more" translatable="false">Show more</string>
+    <!-- Series card: how many downloaded episodes are new. %1$d is the count. -->
+    <string name="media_rail_new_episodes" translatable="false">%1$d new episodes</string>
+    <string name="media_rail_new_episode_one" translatable="false">1 new episode</string>
+    <!-- The Back-dismissible episode picker shown on OK of a series card. -->
+    <string name="media_rail_picker_title" translatable="false">Pick an episode</string>
+    <string name="media_rail_picker_empty" translatable="false">No episodes available</string>
+
+    <!-- The full browse view (Tier 2, BrowseActivity) opened by "Show more": two labeled sections. -->
+    <string name="browse_section_downloaded" translatable="false">Downloaded Media</string>
+    <string name="browse_section_streaming" translatable="false">Streaming</string>
+    <!-- Shown in a section while its source is still loading or when nothing resolved. -->
+    <string name="browse_loading" translatable="false">Loading…</string>
+    <string name="browse_downloaded_empty" translatable="false">No downloaded media</string>
+    <string name="browse_streaming_empty" translatable="false">No trending titles available right now</string>
+</resources>

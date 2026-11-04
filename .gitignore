@@ -21,3 +21,20 @@ bench-results/
 *.aab
 launcher/hs_err_pid*.log
 launcher/replay_pid*.log
+# IPTV rail login (Xtream Codes) stays local
+launcher/app/src/main/res/values/iptv_secrets.xml
+# Beast rail server addresses + API key stays local
+launcher/app/src/main/res/values/beast_secrets.xml
+# TMDB api key for the Streaming section stays local
+launcher/app/src/main/res/values/tmdb_secrets.xml
+# Per-room TV snapshots (serials, device names) stay local
+mytv/*/backups/
+.venv/
+# Mediarium read-only API key for the Beast page stays local
+mytv/*/beast_key.txt
+# Per-room working folder (device notes, keys) stays local in this private fork
+mytv/
+# Kiro session export and editor workspace scratch
+kiro-session-*.zip
+cleanyourtv.code-workspace
+.agents/

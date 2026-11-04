@@ -17,10 +17,10 @@
 
     <!-- Apps pinned to the dock row at the bottom, in this order. Missing apps are skipped. -->
     <string-array name="dock_apps">
-        <item>com.netflix.ninja</item>
-        <item>com.amazon.amazonvideo.livingroom</item>
-        <item>com.google.android.youtube.tv</item>
-        <item>in.startv.hotstar</item>
+        <item>ar.tvplayer.tv</item>                 <!-- TiviMate -->
+        <item>com.kick.mobile</item>                <!-- Kick -->
+        <item>com.netflix.ninja</item>              <!-- Netflix -->
+        <item>com.google.android.youtube.tv</item>  <!-- YouTube -->
     </string-array>
     <!-- With fewer dock_apps than columns (or a dock app that is not installed), the free dock slots take
          the first grid apps, so the dock never shows a gap. false leaves them empty (#162); a theme can
@@ -29,12 +29,11 @@
 
     <!-- Apps never shown as tiles (e.g. the Live TV app, which the Inputs menu already covers). -->
     <string-array name="hidden_apps">
-        <item>com.mediatek.wwtv.tvcenter</item>
-        <item>com.mitv.gallery</item>
+        <item>com.vt.tv.tvcenter</item>             <!-- Hisense Live TV, reached through the Inputs menu -->
     </string-array>
 
     <!-- The TV's Live TV / tuner app, offered at the end of the Inputs menu. Leave empty to omit. -->
-    <string name="live_tv_package" translatable="false">com.mediatek.wwtv.tvcenter</string>
+    <string name="live_tv_package" translatable="false">com.vt.tv.tvcenter</string>
 
     <!-- Open the Live TV app above the first time Home comes up after the TV is switched on, for sets that are
          mostly used for broadcast TV. Once per boot: Home after that stays Home. Can also be set with
@@ -352,6 +351,18 @@
     </string-array>
     <!-- The Inputs pill in the top bar, shown when the TV has inputs to list. false hides it for good; what the
          remote's Input button does is unchanged. Can also be set with "show_inputs_pill" in a theme. -->
+    <!-- Beast pill in the top bar: opens the Mediarium panel on the media server (BeastActivity). Plain HTTP to its
+         address must also be allowed in res/xml/network_security_config.xml. -->
+    <bool name="beast_page">true</bool>
+    <string name="beast_url" translatable="false">http://192.168.1.15:8264/</string>
+    <!-- Merged "Movies & Shows" rail (MediaRail.java): the Beast download library (played by mpv) + the IPTV
+         provider's newest movies (played by Just Player), deduped with the 4K download winning. Server addresses
+         and logins are in the git-ignored res/values/beast_secrets.xml and iptv_secrets.xml; the media server host
+         must be allowed in res/xml/network_security_config.xml. Office only. iptv_rail is off: the merged rail
+         replaces the plain IPTV rail here. -->
+    <bool name="media_rail">true</bool>
+    <bool name="iptv_rail">false</bool>
+
     <bool name="show_inputs_pill">true</bool>
     <!-- The Inputs list shows only HDMI ports and CEC devices that report connected. Empty ports, devices asleep in
          standby (some TVs, TCL among them, report an empty HDMI port as connected-standby, the same state a

@@ -339,6 +339,15 @@
                     android:drawableStart="@drawable/ic_input"
                     android:nextFocusDown="@+id/grid" />
 
+                <!-- config beast_page: opens the Mediarium panel (BeastActivity). -->
+                <TextView
+                    android:id="@+id/btnBeast"
+                    style="@style/TopButton"
+                    android:visibility="gone"
+                    android:singleLine="true"
+                    android:text="@string/beast_button"
+                    android:nextFocusDown="@+id/grid" />
+
                 <TextView
                     android:id="@+id/btnWifi"
                     style="@style/TopButton"

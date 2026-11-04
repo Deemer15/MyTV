@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plain HTTP stays off, except to two LAN hosts:
+       192.168.1.15  the Mediarium ("Beast") server: the panel (BeastActivity) and the rail's metadata (BeastClient).
+       192.168.1.10  the static media file server the Beast rail plays from (beast_media_base).
+     If an address changes, change it here and in mytv\<room>\config.xml / res/values/beast_secrets.xml. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.1.15</domain>
+        <domain includeSubdomains="false">192.168.1.10</domain>
+    </domain-config>
+</network-security-config>

@@ -145,6 +145,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private FrameLayout root;
     private WallpaperPlayer wallpaperPlayer;
     private GlassView glass;
+    /** "Latest movies" above the dock (res/values/iptv_rail.xml); null when off. */
+    private IptvRail IptvRail;
+    /** Merged downloads + IPTV rail above the dock (res/values/media_rail.xml); null when off. Office only. */
+    private MediaRail mediaRail;
     private View ambient;
     private TextView heroName;
     /** The top shelf: heroName, plus the cinematic shelf's "Last opened" line and dock position dots. */
@@ -843,6 +847,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             libraryFromTopBar = true;   // closing it goes back to this button, not to the pill after the last row
         });
         btnLibraryTop.setVisibility(cfg.libraryButton && cfg.appLibrary ? View.VISIBLE : View.GONE);
+        // Beast: the Mediarium panel on the media server, full screen (config beast_page, beast_url).
+        View btnBeast = findViewById(R.id.btnBeast);
+        if (getResources().getBoolean(R.bool.beast_page) && !getString(R.string.beast_url).trim().isEmpty()) {
+            btnBeast.setVisibility(View.VISIBLE);
+            btnBeast.setOnClickListener(v -> startActivity(new Intent(this, BeastActivity.class)));
+        }
         addTopBarApps(cfg.topBarApps, cfg.launchActions);
         iconOnlyButtons = cfg.iconOnlyButtons;
         topMenu = cfg.topMenu;
@@ -897,6 +907,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
             if (keyCode == KeyEvent.KEYCODE_DPAD_UP) return true;
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                // The rail sits between the top bar and the dock.
+                if (mediaRail != null && mediaRail.isShowing()) {
+                    mediaRail.focus();
+                    return true;
+                }
+                if (IptvRail != null && IptvRail.isShowing()) {
+                    IptvRail.focus();
+                    return true;
+                }
                 // Back to the dock tile Up came from, not wherever the focus finder lands.
                 focusTile(singleRow ? lastFocused : lastFocused % COLUMNS);
                 return true;
@@ -913,6 +932,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnSettings.setOnKeyListener(pillKeys);
         btnReorder.setOnKeyListener(pillKeys);
         btnLibraryTop.setOnKeyListener(pillKeys);
+        findViewById(R.id.btnBeast).setOnKeyListener(pillKeys);
         for (View button : topAppButtons) button.setOnKeyListener(pillKeys);
         if (advancedEffects) {
             List<View> pills = new ArrayList<>(Arrays.asList(btnInputs, btnWifi, btnVpn, btnReorder, btnLibraryTop, btnSettings));
@@ -930,6 +950,54 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             boolean onTile = newF != null && newF.getId() == R.id.card;
             if (!onTile) hideGlass();
         });
+
+        // Rail between the top bar and the dock (only with the dock as its own row). media_rail (the merged
+        // downloads + IPTV row) takes precedence; otherwise the plain IPTV rail. The two are mutually exclusive.
+        if (dockRow && !singleRow) {
+            mediaRail = MediaRail.create(this, root, glass, new MediaRail.Host() {
+                @Override public void onRailUp() {
+                    (btnInputs.getVisibility() == View.VISIBLE ? btnInputs : firstTopButton()).requestFocus();
+                }
+
+                @Override public void onRailDown() {
+                    focusTile(lastFocused % COLUMNS);
+                }
+
+                @Override public void onRailFocused() {
+                    hideHero();
+                }
+
+                @Override public void onItemFocused(MediaItem item) { }
+            });
+            if (mediaRail != null) {
+                grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
+                    @Override public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
+                        mediaRail.setGridAtTop(rv.computeVerticalScrollOffset() <= (int) (8 * density));
+                    }
+                });
+            } else {
+                IptvRail = IptvRail.create(this, root, glass, new IptvRail.Host() {
+                    @Override public void onRailUp() {
+                        (btnInputs.getVisibility() == View.VISIBLE ? btnInputs : firstTopButton()).requestFocus();
+                    }
+
+                    @Override public void onRailDown() {
+                        focusTile(lastFocused % COLUMNS);
+                    }
+
+                    @Override public void onRailFocused() {
+                        hideHero();
+                    }
+                });
+                if (IptvRail != null) {
+                    grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
+                        @Override public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
+                            IptvRail.setGridAtTop(rv.computeVerticalScrollOffset() <= (int) (8 * density));
+                        }
+                    });
+                }
+            }
+        }
 
         packageFilter.addAction(Intent.ACTION_PACKAGE_ADDED);
         packageFilter.addAction(Intent.ACTION_PACKAGE_REMOVED);
@@ -1097,6 +1165,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         restartIdleClock();
         promptsPaused = false;
+        if (IptvRail != null) IptvRail.refresh();   // asks the provider when Home comes up, at most every 10 min
+        if (mediaRail != null) mediaRail.refresh(); // asks both sources when Home comes up, at most every 10 min
         if (grid.getAdapter() == null) grid.setAdapter(adapter);   // dropped by onTrimMemory
         switch (tileRefresh.onResume(packagesChangedSinceRebuild())) {
             case REBUILD:
@@ -1374,6 +1444,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         super.onDestroy();
         RemoteKeys.release(this);
         cancelHoldOk();
+        if (IptvRail != null) IptvRail.release();
+        if (mediaRail != null) mediaRail.release();
         if (gameDay != null) gameDay.shutdown();
         unregisterReceiver(packageReceiver);
         if (openOnStartOnWake) unregisterReceiver(wakeReceiver);
@@ -1905,6 +1977,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         String label = adapter.labelAt(position);
         int color = adapter.ambientColorAt(position);
         float y = dockTopInRoot - 14 * density - 26 * density - hero.getHeight();
+        float minTop = headerBottomInRoot();
+        if (mediaRail != null) mediaRail.placeAbove(y, minTop);
+        if (IptvRail != null) IptvRail.placeAbove(y, minTop);
+
+        // The media rail occupies the same band as the dock-app-name shelf. When it is showing, hide the shelf so
+        // the focused app's name (e.g. "TiviMate") does not bleed out behind the rail's featured tile. The shelf
+        // comes back as soon as the rail is hidden (grid scrolled down, or no rail items).
+        boolean railOwnsBand = mediaRail != null && mediaRail.isShowing();
+        if (railOwnsBand) {
+            hero.animate().cancel();
+            hero.setAlpha(0f);
+            if (ambientGlow) ambient.setAlpha(0f);
+            heroShown = false;
+            return;
+        }
         boolean changed = !label.contentEquals(heroName.getText());
         if (cinematic && heroArtAlpha > 0f) showHeroArt(position);
 
@@ -2212,6 +2299,19 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }).start();
     }
 
+    /** The lowest edge of the clock block and the top-bar pills, in root coordinates: the rail stays below it. */
+    private float headerBottomInRoot() {
+        float bottom = 0f;
+        for (int id : new int[] {R.id.leftBlock, R.id.topButtons}) {
+            View v = findViewById(id);
+            if (v == null || v.getVisibility() != View.VISIBLE || v.getHeight() == 0) continue;
+            Rect r = new Rect(0, 0, v.getWidth(), v.getHeight());
+            root.offsetDescendantRectToMyCoords(v, r);
+            bottom = Math.max(bottom, r.bottom);
+        }
+        return bottom;
+    }
+
     private void hideHero() {
         if (!heroShown) return;
         stopAmbientAnimation();
@@ -2449,7 +2549,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     rtlAppGrid, keyCode == KeyEvent.KEYCODE_DPAD_LEFT);
         }
         if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-            if (position < COLUMNS) return false;          // dock row: let focus move to the top bar
+            if (position < COLUMNS) {
+                // Dock row: up to the rail when it shows, else let focus move to the top bar.
+                if (mediaRail != null && mediaRail.isShowing()) {
+                    mediaRail.focus();
+                    grid.playSoundEffect(SoundEffectConstants.NAVIGATION_UP);
+                    return true;
+                }
+                if (IptvRail != null && IptvRail.isShowing()) {
+                    IptvRail.focus();
+                    grid.playSoundEffect(SoundEffectConstants.NAVIGATION_UP);
+                    return true;
+                }
+                return false;
+            }
             target = position - COLUMNS;
         } else {
             int lastRowStart = ((count - 1) / COLUMNS) * COLUMNS;
