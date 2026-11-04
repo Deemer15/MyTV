@@ -357,12 +357,12 @@
          remote's Input button does is unchanged. Can also be set with "show_inputs_pill" in a theme. -->
     <!-- Beast pill in the top bar: opens the Mediarium panel on the media server (BeastActivity). Plain HTTP to its
          address must also be allowed in res/xml/network_security_config.xml. -->
-    <bool name="beast_page">false</bool>
+    <bool name="beast_page">true</bool>
     <string name="beast_url" translatable="false">http://192.168.1.15:8264/</string>
-    <!-- Merged "Movies & Shows" rail: Office only, off here. The bedroom keeps the plain IPTV "Latest movies"
-         rail (no Beast download source on this streaming box). -->
-    <bool name="media_rail">false</bool>
-    <bool name="iptv_rail">true</bool>
+    <!-- Merged "Movies & Shows" rail (Beast downloads played by mpv + IPTV played by Just Player), on in every
+         room. iptv_rail is off: the merged rail replaces the plain IPTV row. -->
+    <bool name="media_rail">true</bool>
+    <bool name="iptv_rail">false</bool>
 
     <bool name="show_inputs_pill">false</bool>
     <!-- The Inputs list shows only HDMI ports and CEC devices that report connected. Empty ports, devices asleep in

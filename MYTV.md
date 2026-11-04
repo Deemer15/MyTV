@@ -14,7 +14,7 @@ This is a private, personal backup. Nothing here is meant for upstream.
 - **Auto-rotating spotlight** that cross-fades every 10 seconds when idle, also while the spotlight is focused.
   Any key press restarts the 10 seconds.
 - **Wide TMDB backdrops** looked up on demand for the showcased title, and a crisper blurred home backdrop.
-- **Beast button** in the top bar that opens the Mediarium panel full-screen (office only).
+- **Beast button** in the top bar that opens the Mediarium panel full-screen (all three rooms).
 - **Per-room setups** under [`mytv/`](mytv/README.md): one config, debloat list and set of scripts per TV.
 - A "Show more" browse screen with the downloaded library and TMDB trending titles that the IPTV provider carries.
 
@@ -24,7 +24,7 @@ This is a private, personal backup. Nothing here is meant for upstream.
 |------|--------|------|
 | Jeremys Office | Hisense SmartTV 4K (lushan), Google TV 12 | Movies & Shows, Beast button, Inputs pill |
 | LivingRoom TV | onn. Streaming Device 4K pro (SNA), Google TV 14 | Movies & Shows, Beast button |
-| Master Bedroom | onn 4K Pro (jarvis2), Google TV 14 | Plain IPTV "Latest movies" row |
+| Master Bedroom | onn 4K Pro (jarvis2), Google TV 14 | Movies & Shows, Beast button |
 
 Addresses, what was disabled and why, remote-button notes and the restore commands are in
 [`mytv/README.md`](mytv/README.md). Each room's folder has its own `config.xml`, `debloat.txt` and the batches

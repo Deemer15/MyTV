@@ -1,6 +1,6 @@
 # My TVs
 
-Two TVs, each set up from this PC with the Clean Your TV launcher (`com.gathin.tvhome`, built from `launcher\`).
+Three TVs, each set up from this PC with the Clean Your TV launcher (`com.gathin.tvhome`, built from `launcher\`).
 Each room has its own folder with its launcher settings, debloat lists and backups.
 
 | Room | Device | Address | Folder |
@@ -9,7 +9,7 @@ Each room has its own folder with its launcher settings, debloat lists and backu
 | LivingRoom TV | onn. Streaming Device 4K pro (SNA), Google TV 14 | `192.168.1.233` | [`LivingRoom TV\`](LivingRoom%20TV/) |
 | Master Bedroom | onn 4K Pro Streaming Device (jarvis2), Google TV 14 | `192.168.1.214` | [`Master Bedroom\`](Master%20Bedroom/) |
 
-Both are on Wi-Fi "Poncho7G". The room names and addresses live in [`rooms.ps1`](rooms.ps1). If a TV gets a new
+All three are on Wi-Fi "Poncho7G". The room names and addresses live in [`rooms.ps1`](rooms.ps1). If a TV gets a new
 address, change it there; better, give each TV a DHCP reservation on the router so it doesn't move.
 
 Every command below needs **USB debugging and Network debugging switched on** on that TV
@@ -40,7 +40,7 @@ copied over the launcher's on every build. Then run `build-and-install.ps1` for 
 - `hidden_apps`: apps never shown as tiles (they stay installed and open from Settings > Apps).
 - `columns`: dock slots and grid columns, 4 to 7. Tiles shrink from 5 up.
 - `show_inputs_pill`: the Inputs button in the top bar.
-- `beast_page`: the Beast button in the top bar (the Mediarium server panel). Office only; see below.
+- `beast_page`: the Beast button in the top bar (the Mediarium server panel). On in all three rooms; see below.
 - `beast_url`: the address Beast opens. Empty hides the button even when `beast_page` is true.
 
 Package names: TiviMate `ar.tvplayer.tv`, Netflix `com.netflix.ninja`, YouTube `com.google.android.youtube.tv`,
@@ -65,7 +65,7 @@ Hisense SmartTV 4K (lushan), Google TV 12, firmware STT2.230929.001.091. Set up 
 - **Theme**: `themes\christmas` (Santa's sleigh wallpaper, glass dock). Screensaver: the stock Google TV
   backdrop.
 - **Beast button**: on, opening the Mediarium server panel at `http://192.168.1.15:8264/`. See the Beast page
-  section below. The bedroom does not have it.
+  section below; it is on in all three rooms.
 - **Kept on by choice**: every streaming app, Google Assistant, Alexa, AirPlay, DLNA, Miracast, firmware updates
   and the screensaver. No ad-blocking DNS.
 - **Backups**: `Jeremys Office\backups\` (before any change, after the old launcher was removed, and a later one).
@@ -95,7 +95,9 @@ onn 4K Pro Streaming Device (jarvis2), Google TV 14, build URO3.260203.035.A1.15
 - **Just Player** 0.218: copied from the office TV and registered as a Play Store install, so it keeps updating.
 - **Dock (6)**: TiviMate, Plex, YouTube, Disney+, Prime Video, Apple TV.
 - **Hidden from the grid**: Play Games (a stub that opens the Play Store), YouTube Music and Just Player
-  (the Latest movies row opens it).
+  (the Movies & Shows rail opens it for IPTV titles).
+- **Beast button and Movies & Shows rail**: on, as in the other two rooms. Playing a "Local" download needs mpv
+  (`is.xyz.mpv`), which is **not installed on this box yet**; Just Player (IPTV titles) is.
 - **No Inputs button**: a streaming box has no HDMI inputs or tuner, so `show_inputs_pill` is off and
   `live_tv_package` is empty.
 - **Theme**: `themes\christmas`, same as the office.
@@ -107,9 +109,11 @@ onn 4K Pro Streaming Device (jarvis2), Google TV 14, build URO3.260203.035.A1.15
 onn. Streaming Device 4K pro (SNA), Google TV 14, build URO4.260304.011.B1.15051976, `192.168.1.233`. Set up on
 2026-11-03 to match the office, minus the Hisense-only parts (no HDMI inputs or tuner on a streaming box).
 
-- **Same as the office**: dock (TiviMate, Kick, Netflix, YouTube), `themes\christmas`, Beast button, merged
-  Movies & Shows rail (`media_rail` on, `iptv_rail` off), 4 columns. Its `config.xml` differs from the office's only
-  in `live_tv_package` (empty), `hidden_apps` (empty) and `show_inputs_pill` (false).
+- **Dock (4)**: TiviMate, Kick, Netflix, Apple TV. Set up the same as the office, then Apple TV was swapped into
+  YouTube's slot on the TV itself (reorder on the real remote: hold OK on a tile > Move); `config.xml` was
+  updated to match. No theme; Beast button and the merged Movies & Shows rail (`media_rail` on, `iptv_rail` off)
+  are on, 4 columns. Its `config.xml` differs from the office's in `dock_apps` (Apple TV, not YouTube),
+  `live_tv_package` (empty), `hidden_apps` (empty) and `show_inputs_pill` (false).
 - **13 packages disabled** (never uninstalled), listed in [`LivingRoom TV\debloat.txt`](LivingRoom%20TV/debloat.txt),
   from the repo's `examples\onn-4k-pro-gen2\` list; applied as `batch1.txt` to `batch3.txt`. Checked identical across
   a reboot. Everything else stays on, as in the office.
@@ -174,7 +178,10 @@ Without it the rail still works, with posters instead of backdrops and an empty 
 The rail turns on only when at least one of Beast or IPTV is fully set. Check what is missing with
 `git status --ignored launcher\app\src\main\res\values`.
 
-## Latest movies row (both rooms)
+## Latest movies row (plain IPTV row, not used now)
+
+All three rooms now use the merged Movies & Shows rail instead (`media_rail` on, `iptv_rail` off). This is the
+older IPTV-only row; its settings are kept in case you want it back in a room.
 
 A row of posters between the clock and the dock: the 20 newest movies on the IPTV provider TiviMate uses, read
 from its Xtream Codes API over HTTPS. Up from the dock goes to the row, Down goes back; the top line names the
@@ -183,15 +190,15 @@ to play a movie from outside. The list is asked for when Home comes up, at most 
 the row shows at once. The account allows 5 streams at once.
 
 - Settings: `launcher\app\src\main\res\values\iptv_rail.xml` (on/off, count, categories to skip, player app).
-  Shared by both rooms.
+  Shared by all rooms.
 - Login: `launcher\app\src\main\res\values\iptv_secrets.xml`, ignored by git and built into the launcher on each
-  TV. If the password changes, edit it there and rebuild both rooms. Format:
+  TV. If the password changes, edit it there and rebuild every room. Format:
   `<string name="iptv_server">https://host</string>`, plus `iptv_username` and `iptv_password`.
 - Turn it off: set `iptv_rail` to `false` (or delete `iptv_secrets.xml`) and rebuild.
 - VLC was tried first and removed: given a second movie while the first was still open, even in the background,
   it showed a black screen or closed.
 
-## Beast page (Jeremys Office only)
+## Beast page (all rooms)
 
 A **Beast** button in the top bar, next to Inputs, opens the Mediarium media-server panel full-screen at
 `http://192.168.1.15:8264/`. It is the real web panel in a locked-down WebView, so everything the panel can do
@@ -210,7 +217,7 @@ A **Beast** button in the top bar, next to Inputs, opens the Mediarium media-ser
 
 Turn it on or off per room in `mytv\<room>\config.xml`, then rebuild that room:
 
-- `beast_page` (`true`/`false`): shows the Beast button. `true` in the office, `false` in the bedroom.
+- `beast_page` (`true`/`false`): shows the Beast button. `true` in all three rooms.
 - `beast_url`: the address it opens. Empty hides the button even when `beast_page` is true.
 
 Because the panel is served over plain HTTP, the host `192.168.1.15` is allowed as a cleartext exception in
