@@ -56,6 +56,12 @@ copied over the launcher's on every build. Then run `build-and-install.ps1` for 
   poster rail. Movies are TMDB trending-this-week that the IPTV provider or download library carries, topped up
   with the newest Local/IPTV movies; Shows are the downloaded series. Focusing a show opens its episodes in
   order as wide stills, each with its own TMDB name and overview. On in all three rooms. Needs `media_rail` on.
+- `calendar_widget`: an "Events" line under the date showing upcoming Google Calendar events. The private ICS
+  feed URL lives in `calendar_secrets.xml` (below); `CalendarClient` fetches it over HTTPS and expands recurring
+  events, covering the start of today through seven days out, so today's and all-day events stay on. Several
+  events rotate every 10 seconds with a crossfade; a long title scrolls right to left once. With no feed set, or
+  nothing coming up, it reads "No upcoming events". Refreshes every 30 minutes while Home is showing. On in all
+  three rooms; the room config must define it (`true`/`false`) or the build fails, as with `weather_widget`.
   Like the others, the room config must define it or that room's build fails.
 - `beast_page`: the Beast button in the top bar (the Mediarium server panel). On in all three rooms; see below.
 - `beast_url`: the address Beast opens. Empty hides the button even when `beast_page` is true.
@@ -209,6 +215,18 @@ Without it the rail still works, with posters instead of backdrops and an empty 
 
 The rail turns on only when at least one of Beast or IPTV is fully set. Check what is missing with
 `git status --ignored launcher\app\src\main\res\values`.
+
+`calendar_secrets.xml`: the private "Secret address in iCal format" from Google Calendar, for the
+`calendar_widget` Events line. Anyone with this URL can read the whole calendar, so it is git-ignored and never
+committed; if it leaks, reset it in Google Calendar and drop the new one in here (no code change). Without the
+file the Events line just reads "No upcoming events".
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calendar_ics_url" translatable="false">GOOGLE_CALENDAR_SECRET_ICS_URL</string>
+</resources>
+```
 
 ## Latest movies row (plain IPTV row, not used now)
 

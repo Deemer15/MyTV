@@ -142,7 +142,7 @@ Never do these in a PR:
 - **No prebuilt APKs or binaries** in the repo, not even as CI artifacts. People build from source.
 - **No uninstalling.** No `pm uninstall` in a list or a script. `pm hide` or `pm block` only with the matching
   undo written in the list header.
-- **No network in the launcher:** no `INTERNET` permission, no network features, no analytics or telemetry, no
+- **No telemetry:**  no analytics or telemetry, no
   background services or polling, no blur or video. It targets TVs with 1 GB of RAM.
 - **No new launcher dependencies** without discussing them in an issue first.
 - **No changes to the safety rules** in `PROMPT.md`, the Home guard and other safety checks in
