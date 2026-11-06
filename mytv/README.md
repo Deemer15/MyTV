@@ -56,6 +56,11 @@ copied over the launcher's on every build. Then run `build-and-install.ps1` for 
   poster rail. Movies are TMDB trending-this-week that the IPTV provider or download library carries, topped up
   with the newest Local/IPTV movies; Shows are the downloaded series. Focusing a show opens its episodes in
   order as wide stills, each with its own TMDB name and overview. On in all three rooms. Needs `media_rail` on.
+  Episode stills and backdrops are pulled at TMDB `original` size for a crisp 1080p banner (posters stay `w500`).
+  A just-aired episode whose still TMDB has not yet promoted into the season payload is filled from the per-episode
+  images endpoint; an episode with no still at all falls back to the show's wide TMDB backdrop, never the stretched
+  vertical poster. Note a limit: when TMDB's only uploaded still for an episode is itself low-res (some are 400x225),
+  that is the source and it looks soft blown up — no launcher setting fixes a low-res source.
 - `calendar_widget`: an "Events" line under the date showing upcoming Google Calendar events. The private ICS
   feed URL lives in `calendar_secrets.xml` (below); `CalendarClient` fetches it over HTTPS and expands recurring
   events, covering the start of today through seven days out, so today's and all-day events stay on. Several

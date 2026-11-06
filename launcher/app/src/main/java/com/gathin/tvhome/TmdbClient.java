@@ -36,10 +36,17 @@ final class TmdbClient {
         return "https://image.tmdb.org/t/p/w500" + posterPath;
     }
 
-    /** Full backdrop URL for a TMDB backdrop_path, wide 16:9 art for the home backdrop; null when absent. */
+    /** Full backdrop URL for a TMDB backdrop_path: original source (1080p-class art) for a crisp full-screen banner;
+     *  null when absent. */
     static String backdropUrl(String backdropPath) {
         if (backdropPath == null || backdropPath.isEmpty()) return null;
-        return "https://image.tmdb.org/t/p/w1280" + backdropPath;
+        return "https://image.tmdb.org/t/p/original" + backdropPath;
+    }
+
+    /** Full still URL for an episode still_path, at original source for the wide banner/card; null when absent. */
+    static String stillUrl(String stillPath) {
+        if (stillPath == null || stillPath.isEmpty()) return null;
+        return "https://image.tmdb.org/t/p/original" + stillPath;
     }
 
     /**
@@ -266,8 +273,8 @@ final class TmdbClient {
                             }
                         }
                         r.endObject();
-                        String stillUrl = still.isEmpty() ? "" : "https://image.tmdb.org/t/p/w500" + still;
-                        out.add(new EpisodeInfo(season, epNum, name, overview, stillUrl));
+                        String stillUrl = stillUrl(still);
+                        out.add(new EpisodeInfo(season, epNum, name, overview, stillUrl == null ? "" : stillUrl));
                     }
                     r.endArray();
                 } else {
@@ -276,7 +283,59 @@ final class TmdbClient {
             }
             r.endObject();
         }
+        // A just-aired episode can have an uploaded still that TMDB has not yet promoted to the season payload's
+        // still_path (iso_639_1 unset, vote_count 0): it is absent here but present on the per-episode images
+        // endpoint. Fill those in with one extra call each, so a new episode shows art without waiting for TMDB to
+        // promote it. Only the still-less episodes cost the extra call.
+        for (int i = 0; i < out.size(); i++) {
+            EpisodeInfo e = out.get(i);
+            if (!e.still.isEmpty()) continue;
+            String path = episodeStill(showId, e.season, e.episode);
+            if (path != null) {
+                out.set(i, new EpisodeInfo(e.season, e.episode, e.name, e.overview,
+                        "https://image.tmdb.org/t/p/original" + path));
+            }
+        }
         return out;
+    }
+
+    /**
+     * The first still of one episode from its own images endpoint, used only to fill a gap the season payload left:
+     * {@code /tv/{id}/season/{s}/episode/{e}/images}. Returns the file_path (leading slash) or null on no key, no
+     * still, or any failure. Blocks; run off the main thread.
+     */
+    private String episodeStill(int showId, int season, int episode) throws IOException {
+        if (apiKey.isEmpty() || showId <= 0) return null;
+        String url = "https://api.themoviedb.org/3/tv/" + showId + "/season/" + season + "/episode/" + episode
+                + "/images?api_key=" + Uri.encode(apiKey);
+        try (Reply reply = open(url)) {
+            JsonReader r = reply.json;
+            r.beginObject();
+            while (r.hasNext()) {
+                if ("stills".equals(r.nextName()) && r.peek() == JsonToken.BEGIN_ARRAY) {
+                    r.beginArray();
+                    String first = null;
+                    while (r.hasNext()) {
+                        String path = "";
+                        r.beginObject();
+                        while (r.hasNext()) {
+                            if ("file_path".equals(r.nextName())) path = string(r).trim();
+                            else r.skipValue();
+                        }
+                        r.endObject();
+                        if (first == null && !path.isEmpty()) first = path;   // keep reading to drain the stream
+                    }
+                    r.endArray();
+                    return first;
+                } else {
+                    r.skipValue();
+                }
+            }
+            r.endObject();
+        } catch (IOException e) {
+            return null;   // a 404 or transient error just means no fallback still
+        }
+        return null;
     }
 
     /** Public search: TMDB's id for the first "tv"/"movie" hit of title (optionally year); 0 for none. */

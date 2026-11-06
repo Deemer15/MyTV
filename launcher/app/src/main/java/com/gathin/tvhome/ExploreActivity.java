@@ -75,7 +75,10 @@ public class ExploreActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ExecutorService imagePool = Executors.newFixedThreadPool(2);
     private final Handler main = new Handler(Looper.getMainLooper());
-    private final LruCache<String, Bitmap> images = new LruCache<String, Bitmap>(8 * 1024 * 1024) {
+    // Bigger now that backdrops/stills come at original size: a 1920x1080 ARGB_8888 banner is ~8 MB, and the
+    // episode rail holds several wide stills at once. 40 MB keeps a banner plus a rail of cards without thrashing;
+    // still modest for the 1 GB TVs, and only Explore (not Home) holds it.
+    private final LruCache<String, Bitmap> images = new LruCache<String, Bitmap>(40 * 1024 * 1024) {
         @Override protected int sizeOf(String key, Bitmap value) { return value.getByteCount(); }
     };
 
@@ -482,7 +485,45 @@ public class ExploreActivity extends Activity {
         bannerMeta.setText(join(show.title, seLabel));
         bannerOverview.setText(info != null && !info.overview.isEmpty()
                 ? info.overview : getString(R.string.explore_no_episode_overview));
-        if (info != null && !info.still.isEmpty()) setBackdrop(info.still);
+        // With a still, show it; without one, fall back to the show's wide TMDB backdrop (original size) rather than
+        // the vertical poster stretched across the banner, or the previous episode's still.
+        if (info != null && !info.still.isEmpty()) {
+            setBackdrop(info.still);
+        } else if (!show.backdrop.isEmpty()) {
+            setBackdrop(show.backdrop);
+        } else {
+            resolveShowBackdrop(show);   // fetch the show's TMDB backdrop, then set it when it arrives
+        }
+    }
+
+    /** Fetches the show's wide TMDB backdrop (original) for the still-less banner fallback, caches it on the item,
+     *  and never falls back to the vertical poster blown up across the banner. */
+    private void resolveShowBackdrop(MediaItem show) {
+        if (tmdb == null) return;
+        String key = "tv|" + show.matchKey;
+        TmdbClient.Info cached = infoCache.get(key);
+        if (cached != null && !cached.backdrop.isEmpty()) {
+            show.backdrop = cached.backdrop;
+            if (episodeMode && episodeShow == show) setBackdrop(cached.backdrop);
+            return;
+        }
+        worker.execute(() -> {
+            TmdbClient.Info info = null;
+            try {
+                info = tmdb.lookup(show.title, show.year, true, 0);
+            } catch (Exception e) {
+                Log.w(TAG, "show backdrop lookup failed: " + e.getClass().getSimpleName());
+            }
+            final TmdbClient.Info result = info;
+            main.post(() -> {
+                if (result == null) return;
+                infoCache.put(key, result);
+                if (!result.backdrop.isEmpty()) {
+                    show.backdrop = result.backdrop;
+                    if (episodeMode && episodeShow == show) setBackdrop(result.backdrop);
+                }
+            });
+        });
     }
 
     private String episodeTitleFallback(BeastClient.Episode ep, int[] se) {
@@ -497,7 +538,7 @@ public class ExploreActivity extends Activity {
         if (url == null || url.isEmpty() || url.equals(backdropKey)) return;
         backdropKey = url;
         imagePool.execute(() -> {
-            Bitmap art = RailImages.fetch(url, 1280);
+            Bitmap art = RailImages.fetch(url, 1920);   // full banner width from the original-size source
             if (art == null) return;
             main.post(() -> {
                 if (!url.equals(backdropKey)) return;
@@ -777,7 +818,9 @@ public class ExploreActivity extends Activity {
             h.name.setText(seText + "  \u00B7  " + name);
             h.name.setVisibility(View.VISIBLE);
             h.itemView.setContentDescription(seText + " " + name);
-            loadImage(h.image, info != null ? info.still : "");
+            // Episode stills are "original" from TMDB; decode near the focused card's real pixel width for a sharp
+            // card, not the small poster width.
+            loadImage(h.image, info != null ? info.still : "", dp(EP_W) * 3 / 2);
             h.itemView.setOnClickListener(v -> play(ep.url, ep.mime, show.title, show.player));
         }
     }
@@ -1144,6 +1187,10 @@ public class ExploreActivity extends Activity {
     }
 
     private void loadImage(ImageView view, String url) {
+        loadImage(view, url, IMAGE_W);
+    }
+
+    private void loadImage(ImageView view, String url, int decodeW) {
         view.setImageDrawable(null);
         if (url == null || url.isEmpty()) {
             view.setTag("");
@@ -1156,7 +1203,7 @@ public class ExploreActivity extends Activity {
             return;
         }
         imagePool.execute(() -> {
-            Bitmap bmp = RailImages.fetch(url, IMAGE_W);
+            Bitmap bmp = RailImages.fetch(url, decodeW);
             if (bmp == null) return;
             images.put(url, bmp);
             main.post(() -> {
