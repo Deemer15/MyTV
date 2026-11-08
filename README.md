@@ -14,7 +14,7 @@ nothing here is meant for upstream. The original project's README is kept for re
   Home / Explore tab row. It merges my Beast (Mediarium) download library, played in mpv, with the IPTV
   provider's newest movies, played in Just Player. Downloads win over streams when both carry the same title.
 - **Explore page** (the Explore tab on Home): a full-screen cinematic browser with a huge TMDB backdrop and the
-  focused title's logo, rating, year and overview. A Movies / Shows tab row on top; one poster rail below.
+  focused title's logo, star rating, age rating, year and overview. A Movies / Shows tab row on top; one poster rail below.
 - **Auto-rotating spotlight** that cross-fades every 10 seconds when idle, on the home screen and in Explore,
   even while a tab or the spotlight is focused. Any key press restarts the 10 seconds.
 - **Beast button** in the top bar that opens the Mediarium panel full-screen.
@@ -88,6 +88,9 @@ The Explore tab opens a full-screen browser built to feel like Apple TV's:
   own TMDB name and overview. OK plays; Back returns to the show list.
 - The huge backdrop and the title's logo, rating, year and overview follow whatever is focused, and the rail
   auto-rotates when left idle.
+- **Age ratings** (PG-13, R, TV-MA and so on) come from TMDB's US listing and appear next to the year, both here
+  and on the Home showcase. A title with no US release on TMDB shows no age rating, so an unreleased film stays
+  blank until TMDB lists one.
 
 ![Explore, Shows tab: The Amazing Race backdrop with its logo over a rail of series](docs/screenshots/explore-shows.jpg)
 
