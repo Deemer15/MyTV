@@ -52,7 +52,8 @@ copied over the launcher's on every build. Then run `build-and-install.ps1` for 
   config must define it (`true`/`false`) or the build fails, because `build-and-install.ps1` copies that file
   over the launcher's.
 - `explore_page`: turns the rail's tab row into Home / Explore. Explore opens a full-screen page with a huge
-  TMDB backdrop, the focused title's logo, rating, year and overview, and a Movies / Shows tab row over one
+  TMDB backdrop, the focused title's logo, star rating, age rating (the US certificate, or the TV rating for a show),
+  year and overview, and a Movies / Shows tab row over one
   poster rail. Movies are TMDB trending-this-week that the IPTV provider or download library carries, topped up
   with the newest Local/IPTV movies; Shows are the downloaded series. Focusing a show opens its episodes in
   order as wide stills, each with its own TMDB name and overview. On in all three rooms. Needs `media_rail` on.

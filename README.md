@@ -86,10 +86,10 @@ The Explore tab opens a full-screen browser built to feel like Apple TV's:
   with my newest Local and IPTV movies so the rail is never thin.
 - **Shows** are my downloaded series. Focusing a show opens its episodes in order as wide stills, each with its
   own TMDB name and overview. OK plays; Back returns to the show list.
-- The huge backdrop and the title's logo, rating, year and overview follow whatever is focused, and the rail
+- The huge backdrop and the title's logo, star rating, age rating, year and overview follow whatever is focused, and the rail
   auto-rotates when left idle.
-- **Age ratings** (PG-13, R, TV-MA and so on) come from TMDB's US listing and appear next to the year, both here
-  and on the Home showcase. A title with no US release on TMDB shows no age rating, so an unreleased film stays
+- **Age ratings** come from TMDB's US listing and appear next to the year, both here and on the Home showcase.
+  Movies show their certificate (PG-13, R and so on) and series show their TV rating (TV-14, TV-MA and so on). A title with no US release on TMDB shows no age rating, so an unreleased film stays
   blank until TMDB lists one.
 
 ![Explore, Shows tab: The Amazing Race backdrop with its logo over a rail of series](docs/screenshots/explore-shows.jpg)
