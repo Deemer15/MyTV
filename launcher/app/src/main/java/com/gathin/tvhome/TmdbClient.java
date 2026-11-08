@@ -151,13 +151,15 @@ final class TmdbClient {
         final int year;
         final String backdrop;  // full wide backdrop URL or ""
         final String logo;      // full title-logo URL or ""
+        final String certification;   // US age rating, e.g. "PG-13", "R", "TV-MA"; "" when none
 
-        Info(String overview, double rating, int year, String backdrop, String logo) {
+        Info(String overview, double rating, int year, String backdrop, String logo, String certification) {
             this.overview = overview;
             this.rating = rating;
             this.year = year;
             this.backdrop = backdrop;
             this.logo = logo;
+            this.certification = certification;
         }
     }
 
@@ -171,9 +173,11 @@ final class TmdbClient {
         String kind = series ? "tv" : "movie";
         int id = knownId > 0 ? knownId : searchId(kind, title, year);
         if (id <= 0) return null;
+        // A movie's age rating lives in release_dates, a show's in content_ratings; ask for the one that applies.
+        String ratings = series ? "content_ratings" : "release_dates";
         String url = "https://api.themoviedb.org/3/" + kind + "/" + id + "?api_key=" + Uri.encode(apiKey)
-                + "&append_to_response=images&include_image_language=en,null";
-        String overview = "", date = "", backdrop = "", logo = "";
+                + "&append_to_response=images," + ratings + "&include_image_language=en,null";
+        String overview = "", date = "", backdrop = "", logo = "", certification = "";
         double rating = 0;
         try (Reply reply = open(url)) {
             JsonReader r = reply.json;
@@ -188,6 +192,12 @@ final class TmdbClient {
                     case "images":
                         if (r.peek() == JsonToken.BEGIN_OBJECT) logo = firstLogo(r); else r.skipValue();
                         break;
+                    case "release_dates":
+                        if (r.peek() == JsonToken.BEGIN_OBJECT) certification = usMovieCertification(r); else r.skipValue();
+                        break;
+                    case "content_ratings":
+                        if (r.peek() == JsonToken.BEGIN_OBJECT) certification = usShowRating(r); else r.skipValue();
+                        break;
                     default: r.skipValue();
                 }
             }
@@ -195,7 +205,91 @@ final class TmdbClient {
         }
         String bd = backdropUrl(backdrop);
         String lg = logo.isEmpty() ? "" : "https://image.tmdb.org/t/p/w500" + logo;
-        return new Info(overview, rating, yearOf(date), bd == null ? "" : bd, lg);
+        return new Info(overview, rating, yearOf(date), bd == null ? "" : bd, lg, certification);
+    }
+
+    /**
+     * The US age rating of a movie from its release_dates object: the theatrical release's certification (type 3),
+     * else the first certification TMDB lists for the US. "" when there is none.
+     */
+    private static String usMovieCertification(JsonReader r) throws IOException {
+        String cert = "";
+        r.beginObject();
+        while (r.hasNext()) {
+            if ("results".equals(r.nextName()) && r.peek() == JsonToken.BEGIN_ARRAY) {
+                r.beginArray();
+                while (r.hasNext()) {
+                    String country = "", theatrical = "", any = "";
+                    r.beginObject();
+                    while (r.hasNext()) {
+                        switch (r.nextName()) {
+                            case "iso_3166_1": country = string(r).trim(); break;
+                            case "release_dates":
+                                if (r.peek() == JsonToken.BEGIN_ARRAY) {
+                                    r.beginArray();
+                                    while (r.hasNext()) {
+                                        String c = "";
+                                        int type = 0;
+                                        r.beginObject();
+                                        while (r.hasNext()) {
+                                            switch (r.nextName()) {
+                                                case "certification": c = string(r).trim(); break;
+                                                case "type": type = (int) parseLong(string(r)); break;
+                                                default: r.skipValue();
+                                            }
+                                        }
+                                        r.endObject();
+                                        if (c.isEmpty()) continue;
+                                        if (any.isEmpty()) any = c;
+                                        if (type == 3 && theatrical.isEmpty()) theatrical = c;
+                                    }
+                                    r.endArray();
+                                } else {
+                                    r.skipValue();
+                                }
+                                break;
+                            default: r.skipValue();
+                        }
+                    }
+                    r.endObject();
+                    if ("US".equals(country)) cert = theatrical.isEmpty() ? any : theatrical;
+                }
+                r.endArray();
+            } else {
+                r.skipValue();
+            }
+        }
+        r.endObject();
+        return cert;
+    }
+
+    /** The US rating of a show from its content_ratings object (for example "TV-MA"); "" when there is none. */
+    private static String usShowRating(JsonReader r) throws IOException {
+        String rating = "";
+        r.beginObject();
+        while (r.hasNext()) {
+            if ("results".equals(r.nextName()) && r.peek() == JsonToken.BEGIN_ARRAY) {
+                r.beginArray();
+                while (r.hasNext()) {
+                    String country = "", value = "";
+                    r.beginObject();
+                    while (r.hasNext()) {
+                        switch (r.nextName()) {
+                            case "iso_3166_1": country = string(r).trim(); break;
+                            case "rating": value = string(r).trim(); break;
+                            default: r.skipValue();
+                        }
+                    }
+                    r.endObject();
+                    if ("US".equals(country)) rating = value;
+                }
+                r.endArray();
+            } else {
+                r.skipValue();
+            }
+        }
+        r.endObject();
+        return rating;
     }
 
     /** The "images" object's best logo path: the first English one, else the first of any language. */

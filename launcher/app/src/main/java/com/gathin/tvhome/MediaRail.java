@@ -111,6 +111,8 @@ final class MediaRail {
     /** Backdrop URLs found for "title|year" keys, so a showcased item is looked up at most once per session.
      *  "" is cached for a title with no TMDB backdrop, so we don't re-query it every time it is shown. */
     private final Map<String, String> backdropCache = new HashMap<>();
+    /** US age ratings found for "sort|title|year" keys (for example "PG-13"); "" means looked up, none rated. */
+    private final Map<String, String> certCache = new HashMap<>();
     private final String downloadPlayer;
     private final String streamPlayer;
     private final int limit;
@@ -1347,20 +1349,58 @@ final class MediaRail {
         loadImage(showcaseImage, wideArt(it));
         maybeFetchBackdrop(it);   // the provider gave only a poster: fill a wide 16:9 backdrop from TMDB if we can
         featuredTitle.setText(it.title);
+        String cert = certCache.get(certKey(it));
+        featuredSub.setText(detailLine(it, cert == null ? "" : cert));
+        maybeFetchCertification(it);   // the age rating (PG-13, TV-MA, ...) joins the line once TMDB answers
+    }
 
-        // Detail line under the title: "N new episodes" for a series, else "year" when known; append the source.
-        String source = it.source == MediaItem.Source.DOWNLOAD ? badgeDownload : badgeStream;
-        String detail;
+    /** Detail line under the title: "year" or "N new episodes", then the age rating when known, the source and when
+     *  it was added. */
+    private String detailLine(MediaItem it, String cert) {
+        List<String> parts = new ArrayList<>();
         if (it.isSeries) {
-            detail = newEpisodesText(it.newEpisodeCount) + "  ·  " + source;
+            parts.add(newEpisodesText(it.newEpisodeCount));
         } else if (it.year > 0) {
-            detail = it.year + "  ·  " + source;
-        } else {
-            detail = source;
+            parts.add(String.valueOf(it.year));
         }
+        if (!cert.isEmpty()) parts.add(cert);
+        parts.add(it.source == MediaItem.Source.DOWNLOAD ? badgeDownload : badgeStream);
         String added = addedText(it.added);
-        if (!added.isEmpty()) detail += "  ·  " + added;
-        featuredSub.setText(detail);
+        if (!added.isEmpty()) parts.add(added);
+        return String.join("  ·  ", parts);
+    }
+
+    private static String certKey(MediaItem it) {
+        return (it.isSeries ? "tv|" : "mv|") + it.title + "|" + it.year;
+    }
+
+    /**
+     * The US age rating for the showcased title, from TMDB (off the main thread), cached per title and year. When it
+     * comes back and the same item is still showing, the detail line is redrawn with it. A failed lookup is not
+     * cached, so the next time the item is shown it is tried again.
+     */
+    private void maybeFetchCertification(MediaItem it) {
+        if (tmdb == null || it == null) return;
+        String key = certKey(it);
+        if (certCache.containsKey(key)) return;
+        final String title = it.title;
+        final int year = it.year;
+        final boolean series = it.isSeries;
+        worker.execute(() -> {
+            String cert;
+            try {
+                TmdbClient.Info info = tmdb.lookup(title, year, series, 0);
+                cert = info == null ? "" : info.certification;
+            } catch (Exception e) {
+                return;
+            }
+            final String result = cert;
+            main.post(() -> {
+                if (released) return;
+                certCache.put(key, result);
+                if (!result.isEmpty() && isSelected(it)) featuredSub.setText(detailLine(it, result));
+            });
+        });
     }
 
     private String newEpisodesText(int count) {

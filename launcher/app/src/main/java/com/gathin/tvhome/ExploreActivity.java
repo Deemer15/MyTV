@@ -459,7 +459,7 @@ public class ExploreActivity extends Activity {
         String rating = info.rating > 0 ? String.format(java.util.Locale.US, "\u2605 %.1f", info.rating) : "";
         String badge = it.source == MediaItem.Source.DOWNLOAD ? badgeDownload : badgeStream;
         bannerMeta.setText(join(it.isSeries ? getString(R.string.explore_type_show)
-                : getString(R.string.explore_type_movie), year, rating, badge));
+                : getString(R.string.explore_type_movie), year, info.certification, rating, badge));
         if (!info.logo.isEmpty()) {
             loadInto(logo, info.logo, () -> {
                 if (featured == it && !episodeMode) {
