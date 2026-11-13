@@ -43,3 +43,5 @@ cleanyourtv.code-workspace
 .agents/
 # Local agent conventions / steering (holds a LAN IP and work-email reference) — stays local
 .kiro/
+# Home Assistant handoff: public IP, router and family details; stays local
+HA-CONTEXT.md
