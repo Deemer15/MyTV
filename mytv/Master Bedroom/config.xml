@@ -359,6 +359,9 @@
          address must also be allowed in res/xml/network_security_config.xml. -->
     <bool name="beast_page">true</bool>
     <string name="beast_url" translatable="false">http://192.168.1.15:8264/</string>
+    <!-- House pill, left of Beast: opens the Home Assistant dashboard full screen (same page as Beast). Empty hides it. -->
+    <bool name="ha_page">true</bool>
+    <string name="ha_url" translatable="false">http://192.168.1.15:8123/home-dashboard</string>
     <!-- Merged "Movies & Shows" rail (Beast downloads played by mpv + IPTV played by Just Player), on in every
          room. iptv_rail is off: the merged rail replaces the plain IPTV row. -->
     <bool name="media_rail">true</bool>

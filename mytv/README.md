@@ -71,6 +71,9 @@ copied over the launcher's on every build. Then run `build-and-install.ps1` for 
   Like the others, the room config must define it or that room's build fails.
 - `beast_page`: the Beast button in the top bar (the Mediarium server panel). On in all three rooms; see below.
 - `beast_url`: the address Beast opens. Empty hides the button even when `beast_page` is true.
+- `ha_page`: the house pill, left of Beast. It opens the Home Assistant dashboard at `ha_url` full screen, in the same
+  page Beast uses (arrows move a pointer, OK clicks). On in all three rooms. `ha_url` empty hides the pill. The
+  host must be allowed as cleartext in `network_security_config.xml`, which it already is as the Beast server's host.
 
 Package names: TiviMate `ar.tvplayer.tv`, Netflix `com.netflix.ninja`, YouTube `com.google.android.youtube.tv`,
 Prime Video `com.amazon.amazonvideo.livingroom`, Disney+ `com.disney.disneyplus`, Hulu `com.hulu.livingroomplus`,

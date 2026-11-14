@@ -1105,6 +1105,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             libraryFromTopBar = true;   // closing it goes back to this button, not to the pill after the last row
         });
         btnLibraryTop.setVisibility(cfg.libraryButton && cfg.appLibrary ? View.VISIBLE : View.GONE);
+        // House pill: the Home Assistant dashboard, full screen, on the same page as Beast (config ha_page, ha_url).
+        View btnHome = findViewById(R.id.btnHome);
+        if (getResources().getBoolean(R.bool.ha_page) && !getString(R.string.ha_url).trim().isEmpty()) {
+            btnHome.setVisibility(View.VISIBLE);
+            btnHome.setOnClickListener(v -> startActivity(new Intent(this, BeastActivity.class)
+                    .putExtra(BeastActivity.EXTRA_URL, getString(R.string.ha_url).trim())));
+        }
         // Beast: the Mediarium panel on the media server, full screen (config beast_page, beast_url).
         View btnBeast = findViewById(R.id.btnBeast);
         if (getResources().getBoolean(R.bool.beast_page) && !getString(R.string.beast_url).trim().isEmpty()) {

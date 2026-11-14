@@ -3,5 +3,6 @@
      config.xml, set per room in mytv\<room>\config.xml. -->
 <resources>
     <string name="beast_button" translatable="false">Beast</string>
+    <string name="home_assistant_button" translatable="false">Home Assistant</string>
     <string name="beast_unreachable" translatable="false">Can\'t reach the Beast at %1$s. Is the server on?</string>
 </resources>

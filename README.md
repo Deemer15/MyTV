@@ -18,6 +18,8 @@ nothing here is meant for upstream. The original project's README is kept for re
 - **Auto-rotating spotlight** that cross-fades every 10 seconds when idle, on the home screen and in Explore,
   even while a tab or the spotlight is focused. Any key press restarts the 10 seconds.
 - **Beast button** in the top bar that opens the Mediarium panel full-screen.
+- **House pill** left of Beast that opens my Home Assistant dashboard full-screen, in the same pointer-driven page
+  Beast uses. Each is a config switch (`ha_page`, `beast_page`) that a room's `config.xml` can turn off.
 - **Weather widget** in place of the date next to the clock: current temperature, a condition icon and today's
   high and low, from the TV's own location.
 - **Per-room setups** under [`mytv/`](mytv/README.md): one config, debloat list and set of scripts per TV.

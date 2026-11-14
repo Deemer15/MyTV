@@ -28,6 +28,8 @@ import android.widget.TextView;
  * Back goes back inside the panel, and leaves when there is nothing to go back to.
  */
 public class BeastActivity extends Activity {
+    /** Intent extra: the page to open. Without it the page is beast_url. */
+    static final String EXTRA_URL = "com.gathin.tvhome.URL";
     private WebView web;
     private String home;
     private String origin;
@@ -39,7 +41,9 @@ public class BeastActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        home = getString(R.string.beast_url).trim();
+        // The page to open: the house pill passes the Home Assistant dashboard; Beast opens its own panel.
+        String given = getIntent().getStringExtra(EXTRA_URL);
+        home = given != null && !given.trim().isEmpty() ? given.trim() : getString(R.string.beast_url).trim();
         android.net.Uri u = android.net.Uri.parse(home);
         origin = u.getScheme() + "://" + u.getAuthority();
 

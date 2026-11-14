@@ -423,6 +423,16 @@
                     android:drawableStart="@drawable/ic_input"
                     android:nextFocusDown="@+id/grid" />
 
+                <!-- config ha_page: the house pill, left of Beast; opens the Home Assistant dashboard (BeastActivity). -->
+                <TextView
+                    android:id="@+id/btnHome"
+                    style="@style/TopButton"
+                    android:visibility="gone"
+                    android:contentDescription="@string/home_assistant_button"
+                    android:gravity="center"
+                    android:text=""
+                    android:drawableStart="@drawable/ic_house"
+                    android:nextFocusDown="@+id/grid" />
                 <!-- config beast_page: opens the Mediarium panel (BeastActivity). -->
                 <TextView
                     android:id="@+id/btnBeast"
