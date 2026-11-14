@@ -30,6 +30,10 @@ import android.widget.TextView;
 public class BeastActivity extends Activity {
     /** Intent extra: the page to open. Without it the page is beast_url. */
     static final String EXTRA_URL = "com.gathin.tvhome.URL";
+    /** CSS width a page opened from EXTRA_URL (the Home Assistant dashboard) is laid out at. A 1080p TV at density 320
+     *  reports only about 960 CSS px, which gives a dashboard its tablet layout; 1920 gives it the desktop one. */
+    private static final int DESKTOP_WIDTH = 1920;
+    private boolean desktop;
     private WebView web;
     private String home;
     private String origin;
@@ -43,7 +47,8 @@ public class BeastActivity extends Activity {
         super.onCreate(state);
         // The page to open: the house pill passes the Home Assistant dashboard; Beast opens its own panel.
         String given = getIntent().getStringExtra(EXTRA_URL);
-        home = given != null && !given.trim().isEmpty() ? given.trim() : getString(R.string.beast_url).trim();
+        desktop = given != null && !given.trim().isEmpty();
+        home = desktop ? given.trim() : getString(R.string.beast_url).trim();
         android.net.Uri u = android.net.Uri.parse(home);
         origin = u.getScheme() + "://" + u.getAuthority();
 
@@ -82,8 +87,14 @@ public class BeastActivity extends Activity {
             }
 
             @Override
+            public void onPageCommitVisible(WebView view, String url) {
+                widen(view);
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
                 CookieManager.getInstance().flush(); // keep the sign-in across restarts
+                widen(view);
             }
         });
         root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
@@ -100,6 +111,14 @@ public class BeastActivity extends Activity {
         web.requestFocus();
         if (state != null) web.restoreState(state);
         else web.loadUrl(home);
+    }
+
+    /** Lays the Home Assistant page out DESKTOP_WIDTH CSS px wide by rewriting its viewport tag; Beast is left alone. */
+    private void widen(WebView view) {
+        if (!desktop) return;
+        view.evaluateJavascript("(function(){var m=document.querySelector('meta[name=viewport]');"
+                + "if(!m){m=document.createElement('meta');m.name='viewport';document.head.appendChild(m);}"
+                + "m.setAttribute('content','width=" + DESKTOP_WIDTH + "');})();", null);
     }
 
     /**
