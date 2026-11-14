@@ -20,6 +20,10 @@ nothing here is meant for upstream. The original project's README is kept for re
 - **Beast button** in the top bar that opens the Mediarium panel full-screen.
 - **House pill** left of Beast that opens my Home Assistant dashboard full-screen, in the same pointer-driven page
   Beast uses. Each is a config switch (`ha_page`, `beast_page`) that a room's `config.xml` can turn off.
+- **Motion warning**: while Home is showing, the house pill turns solid red and reads **Motion!** when a camera
+  sensor (front door motion, garage motion, doorbell ding) is on. Pressing it opens the dashboard, where the camera
+  card goes live, and clears the warning on every other TV too. It listens over one live connection to Home
+  Assistant that exists only while Home is in front, and it needs a token in a git-ignored file.
 - **Weather widget** in place of the date next to the clock: current temperature, a condition icon and today's
   high and low, from the TV's own location.
 - **Per-room setups** under [`mytv/`](mytv/README.md): one config, debloat list and set of scripts per TV.
@@ -150,8 +154,8 @@ release APK must stay under 786,432 bytes (the repo's size gate); the current bu
 
 These stay on my PC on purpose, so a fresh clone will not build the rail until they are recreated:
 
-- `launcher\app\src\main\res\values\iptv_secrets.xml`, `beast_secrets.xml`, `tmdb_secrets.xml`: the IPTV
-  login, the Beast server addresses and API key, and the TMDB API key. The exact files and what each value means
+- `launcher\app\src\main\res\values\iptv_secrets.xml`, `beast_secrets.xml`, `tmdb_secrets.xml`, `ha_secrets.xml`: the IPTV
+  login, the Beast server addresses and API key, the TMDB API key, and the Home Assistant token. The exact files and what each value means
   are in [`mytv/README.md`](mytv/README.md#secrets-files-git-ignored-recreate-on-a-new-pc).
 - `mytv\*\backups\`: package and settings snapshots of each TV, taken before any change.
 - `mytv\Office\beast_key.txt`: the Beast server API key.

@@ -382,6 +382,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private RecyclerView.OnScrollListener pendingFocusScroll;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    /** The house pill and its motion warning (HaAlert); haAlert is null when there is no token or ha_alert is off. */
+    private TextView btnHomePill;
+    private android.graphics.drawable.Drawable homePillNormal;   // the pill's own background, kept while it is red
+    private HaAlert haAlert;
     /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
         @Override
@@ -1106,11 +1110,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         });
         btnLibraryTop.setVisibility(cfg.libraryButton && cfg.appLibrary ? View.VISIBLE : View.GONE);
         // House pill: the Home Assistant dashboard, full screen, on the same page as Beast (config ha_page, ha_url).
-        View btnHome = findViewById(R.id.btnHome);
+        btnHomePill = (TextView) findViewById(R.id.btnHome);
         if (getResources().getBoolean(R.bool.ha_page) && !getString(R.string.ha_url).trim().isEmpty()) {
-            btnHome.setVisibility(View.VISIBLE);
-            btnHome.setOnClickListener(v -> startActivity(new Intent(this, BeastActivity.class)
-                    .putExtra(BeastActivity.EXTRA_URL, getString(R.string.ha_url).trim())));
+            btnHomePill.setVisibility(View.VISIBLE);
+            // Motion warning (config ha_alert, token in ha_secrets.xml): the pill turns red while a camera sensor is on.
+            haAlert = HaAlert.create(this, handler, this::showHaAlert);
+            btnHomePill.setOnClickListener(v -> {
+                if (haAlert != null) haAlert.acknowledge();   // clears here and on every other TV
+                startActivity(new Intent(this, BeastActivity.class)
+                        .putExtra(BeastActivity.EXTRA_URL, getString(R.string.ha_url).trim()));
+            });
         }
         // Beast: the Mediarium panel on the media server, full screen (config beast_page, beast_url).
         View btnBeast = findViewById(R.id.btnBeast);
@@ -1437,6 +1446,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onResume() {
         super.onResume();
         resumed = true;
+        if (haAlert != null) haAlert.start();   // the live connection runs only while Home is in front
         // A festival that started or ended while Home was in the background: rebuild with or without it.
         if (festive != festival.active(LocalDate.now())) {
             recreate();
@@ -1673,6 +1683,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onPause() {
         super.onPause();
         resumed = false;
+        if (haAlert != null) haAlert.stop();
         if (mediaRail != null) mediaRail.onPaused();   // stop idle auto-rotation while Home is backgrounded
         // No UP reaches a paused Home, so a vendor-key hold it saw go down would still open its app later.
         // Only Home's own share is dropped: a key service that saw the same DOWN keeps its hold.
@@ -1752,9 +1763,35 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
     }
 
+    /** The house pill red and labelled while a camera sensor is on (HaAlert), a plain house button otherwise. */
+    private void showHaAlert(boolean active) {
+        if (btnHomePill == null) return;
+        if (active) {
+            if (homePillNormal == null) homePillNormal = btnHomePill.getBackground();
+            btnHomePill.setText(R.string.ha_alert_label);
+            // A solid red pill, with a white ring while it has focus. Tinting the pill's own glass came out maroon.
+            float ring = 3f * getResources().getDisplayMetrics().density;
+            android.graphics.drawable.GradientDrawable red = new android.graphics.drawable.GradientDrawable();
+            red.setColor(0xFFE53935);
+            red.setCornerRadius(1000f);
+            android.graphics.drawable.GradientDrawable focused = new android.graphics.drawable.GradientDrawable();
+            focused.setColor(0xFFE53935);
+            focused.setCornerRadius(1000f);
+            focused.setStroke(Math.round(ring), 0xFFFFFFFF);
+            android.graphics.drawable.StateListDrawable states = new android.graphics.drawable.StateListDrawable();
+            states.addState(new int[]{android.R.attr.state_focused}, focused);
+            states.addState(new int[]{}, red);
+            btnHomePill.setBackground(states);
+        } else {
+            btnHomePill.setText("");
+            if (homePillNormal != null) btnHomePill.setBackground(homePillNormal);
+        }
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (haAlert != null) haAlert.release();
         RemoteKeys.release(this);
         cancelHoldOk();
         if (IptvRail != null) IptvRail.release();

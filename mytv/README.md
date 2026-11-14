@@ -74,6 +74,9 @@ copied over the launcher's on every build. Then run `build-and-install.ps1` for 
 - `ha_page`: the house pill, left of Beast. It opens the Home Assistant dashboard at `ha_url` full screen, in the same
   page Beast uses (arrows move a pointer, OK clicks). On in all three rooms. `ha_url` empty hides the pill. The
   host must be allowed as cleartext in `network_security_config.xml`, which it already is as the Beast server's host.
+- The motion warning on that pill (`ha_alert`, the watched sensors and the label) is in
+  `launcher\app\src\main\res\values\ha_alert.xml`, shared by every room. It needs the token in `ha_secrets.xml`
+  (below). Without the token the pill is a plain house button.
 
 Package names: TiviMate `ar.tvplayer.tv`, Netflix `com.netflix.ninja`, YouTube `com.google.android.youtube.tv`,
 Prime Video `com.amazon.amazonvideo.livingroom`, Disney+ `com.disney.disneyplus`, Hulu `com.hulu.livingroomplus`,
@@ -219,6 +222,18 @@ Without it the rail still works, with posters instead of backdrops and an empty 
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="tmdb_api_key" translatable="false">TMDB_V3_API_KEY</string>
+</resources>
+```
+
+`ha_secrets.xml`: a Home Assistant long-lived access token, for the motion warning on the house pill. Create it in
+Home Assistant under your profile, Security, Long-lived access tokens, named `MyTV`, and paste it between the
+`ha_token` tags. It is built into the APK, so rebuild every room after changing it, and delete the token in Home
+Assistant if it leaks.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ha_token" translatable="false">LONG_LIVED_TOKEN</string>
 </resources>
 ```
 

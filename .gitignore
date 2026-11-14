@@ -45,3 +45,4 @@ cleanyourtv.code-workspace
 .kiro/
 # Home Assistant handoff: public IP, router and family details; stays local
 HA-CONTEXT.md
+launcher/app/src/main/res/values/ha_secrets.xml

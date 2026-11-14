@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Motion warning on the house pill (HaAlert). Shared by every room, so it is not in a room's config.xml.
+     The token lives in the git-ignored ha_secrets.xml; without it the pill stays a plain house button. -->
+<resources>
+    <!-- false leaves the pill as a plain house button. Needs ha_page and a token. -->
+    <bool name="ha_alert">true</bool>
+    <!-- Home Assistant entities that turn the pill red while any one of them is on. -->
+    <string-array name="ha_alert_entities" translatable="false">
+        <item>binary_sensor.front_door_motion</item>
+        <item>binary_sensor.garage_door_motion</item>
+        <item>binary_sensor.front_door_ding</item>
+    </string-array>
+    <string name="ha_alert_label" translatable="false">Motion!</string>
+</resources>
