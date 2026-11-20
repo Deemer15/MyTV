@@ -33,7 +33,7 @@ launcher/app/src/main/res/values/calendar_secrets.xml
 # Per-room TV snapshots (serials, device names) stay local
 mytv/*/backups/
 .venv/
-# Mediarium read-only API key for the Beast page stays local
+# Mediarium read-only API key for local backend tooling stays local
 mytv/*/beast_key.txt
 # Per-room working folder (device notes, keys) stays local in this private fork
 mytv/
@@ -43,6 +43,9 @@ cleanyourtv.code-workspace
 .agents/
 # Local agent conventions / steering (holds a LAN IP and work-email reference) — stays local
 .kiro/
+# Private handoff and agent configuration stay local.
+/MYTV_CONTEXT.md
+/.github/agents/MyTV.agent.md
 # Home Assistant handoff: public IP, router and family details; stays local
 HA-CONTEXT.md
 launcher/app/src/main/res/values/ha_secrets.xml
