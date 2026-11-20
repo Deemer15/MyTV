@@ -42,21 +42,20 @@ copied over the launcher's on every build. Then run `build-and-install.ps1` for 
 - `columns`: dock slots and grid columns, 4 to 7. Tiles shrink from 5 up.
 - `show_inputs_pill`: the Inputs button in the top bar.
 - `show_network_pill`: the Wi-Fi button in the top bar.
-- **House rule: the top bar is Beast and Settings only, on every TV, current and future.** `show_network_pill` and
-  `show_inputs_pill` are `false` in all three rooms. A new room copies the office `config.xml`, which already has
-  both off; keep them off. The remote's Input button still opens the Inputs list on a TV that has inputs.
+- **House rule: the media UI uses the left drawer, not header pills.** Dashboard, TV, Movies, Shows, Apps, Beast,
+  Home Assist and Settings live in that menu. The old Home Assist, Beast and Settings top pills are hidden.
+  `show_network_pill` and `show_inputs_pill` are also `false` in all three rooms. The remote's Input button still
+  opens the Inputs list on a TV that has inputs.
 - `weather_widget`: replaces the date next to the clock with a weather widget: current temperature (Fahrenheit),
   a condition icon and today's high and low. The data comes from Open-Meteo over HTTPS (no account or key); the
   place is the TV's own last known location, rounded to about 1 km, else `latitude` and `longitude` from the same
   file. Refreshes every 30 minutes while Home is showing. If it can't get a forecast, the date stays. The room
   config must define it (`true`/`false`) or the build fails, because `build-and-install.ps1` copies that file
   over the launcher's.
-- `explore_page`: turns the rail's tab row into Home / Explore. Explore opens a full-screen page with a huge
-  TMDB backdrop, the focused title's logo, star rating, age rating (the US certificate, or the TV rating for a show),
-  year and overview, and a Movies / Shows tab row over one
-  poster rail. Movies are TMDB trending-this-week that the IPTV provider or download library carries, topped up
-  with the newest Local/IPTV movies; Shows are the downloaded series. Focusing a show opens its episodes in
-  order as wide stills, each with its own TMDB name and overview. On in all three rooms. Needs `media_rail` on.
+- `explore_page`: keeps the full-screen TMDB detail flow used by show pages. The old Home / Explore tab is no
+  longer shown; the left drawer chooses Dashboard, Movies, Shows and Apps directly. Movies use the newest Local
+  and IPTV titles; Shows use the downloaded series. Focusing a show opens its episodes in order as wide stills,
+  each with its own TMDB name and overview. On in all three rooms. Needs `media_rail` on.
   Episode stills and backdrops are pulled at TMDB `original` size for a crisp 1080p banner (posters stay `w500`).
   A just-aired episode whose still TMDB has not yet promoted into the season payload is filled from the per-episode
   images endpoint; an episode with no still at all falls back to the show's wide TMDB backdrop, never the stretched
@@ -69,12 +68,12 @@ copied over the launcher's on every build. Then run `build-and-install.ps1` for 
   nothing coming up, it reads "No upcoming events". Refreshes every 30 minutes while Home is showing. On in all
   three rooms; the room config must define it (`true`/`false`) or the build fails, as with `weather_widget`.
   Like the others, the room config must define it or that room's build fails.
-- `beast_page`: the Beast button in the top bar (the Mediarium server panel). On in all three rooms; see below.
+- `beast_page`: enables the Beast destination in the left drawer. On in all three rooms; see below.
 - `beast_url`: the address Beast opens. Empty hides the button even when `beast_page` is true.
-- `ha_page`: the house pill, left of Beast. It opens the Home Assistant dashboard at `ha_url` full screen, in the same
+- `ha_page`: enables Home Assist in the left drawer. It opens the Home Assistant dashboard at `ha_url` full screen, in the same
   page Beast uses (arrows move a pointer, OK clicks). On in all three rooms. `ha_url` empty hides the pill. The
   host must be allowed as cleartext in `network_security_config.xml`, which it already is as the Beast server's host.
-- The motion warning on that pill (`ha_alert`, the watched sensors and the label) is in
+- The Home Assistant motion warning (`ha_alert`, the watched sensors and the label) is in
   `launcher\app\src\main\res\values\ha_alert.xml`, shared by every room. It needs the token in `ha_secrets.xml`
   (below). Without the token the pill is a plain house button.
 
@@ -83,7 +82,8 @@ Prime Video `com.amazon.amazonvideo.livingroom`, Disney+ `com.disney.disneyplus`
 Apple TV `com.apple.atve.androidtv.appletv`, Plex `com.plexapp.android`, Kick `com.kick.mobile`,
 Just Player `com.brouken.player`, SmartTube beta `org.smarttube.beta`.
 
-Tiles can also be reordered on the TV itself: hold OK on the Settings pill and pick Reorder.
+Apps and launcher configuration are reached from the left drawer. The original Home grid can still be managed
+from Launcher Settings when needed.
 
 ## Office
 
@@ -101,7 +101,7 @@ Hisense SmartTV 4K (lushan), Google TV 12, firmware STT2.230929.001.091. Set up 
 - **Inputs menu**: HDMI 1-3 and Live TV (`com.vt.tv.tvcenter`, hidden from the grid).
 - **Theme**: `themes\christmas` (Santa's sleigh wallpaper, glass dock). Screensaver: the stock Google TV
   backdrop.
-- **Beast button**: on, opening the Mediarium server panel at `http://xxx.xxx.xxx.15:8264/`. See the Beast page
+- **Beast drawer item**: on, opening the Mediarium server panel at `http://xxx.xxx.xxx.15:8264/`. See the Beast page
   section below; it is on in all three rooms.
 - **Weather widget**: on, in place of the date next to the clock (current temperature, condition icon, today's
   high/low). The Wi-Fi and Inputs pills are off (house rule above); Beast and Settings stay. Verified on screen
@@ -144,7 +144,7 @@ onn 4K Pro Streaming Device (jarvis2), Google TV 14, build URO3.260203.035.A1.15
   `install-write` / `install-commit`.
 - **Hidden from the grid**: Play Games (a stub that opens the Play Store), YouTube Music and Just Player
   (the Movies & Shows rail opens it for IPTV titles).
-- **Beast button and Movies & Shows rail**: on, as in the other two rooms. Playing a "Local" download needs mpv
+- **Beast drawer item and Movies & Shows rail**: on, as in the other two rooms. Playing a "Local" download needs mpv
   (`is.xyz.mpv`), which is **not installed on this box yet**; Just Player (IPTV titles) is.
 - **No Inputs button**: a streaming box has no HDMI inputs or tuner, so `show_inputs_pill` is off and
   `live_tv_package` is empty.
@@ -161,7 +161,7 @@ onn. Streaming Device 4K pro (SNA), Google TV 14, build URO4.260304.011.B1.15051
 
 - **Dock (5)**: TiviMate, Kick, Netflix, YouTube, Apple TV — the office's dock, except the office now has
   SmartTube where this TV still has YouTube. No theme;
-  Beast button and the merged Movies & Shows rail (`media_rail` on, `iptv_rail` off) are on, 5 columns. Its
+  Beast drawer item and the Dashboard media rails (`media_rail` on, `iptv_rail` off) are on, 5 columns. Its
   `config.xml` differs from the office's only in `live_tv_package` (empty), `hidden_apps` (empty) and
   `show_inputs_pill` (false) — the parts that depend on this being a streaming box with no HDMI inputs or tuner.
 - **13 packages disabled** (never uninstalled), listed in [`LivingRoom TV\debloat.txt`](LivingRoom%20TV/debloat.txt),
@@ -225,7 +225,7 @@ Without it the rail still works, with posters instead of backdrops and an empty 
 </resources>
 ```
 
-`ha_secrets.xml`: a Home Assistant long-lived access token, for the motion warning on the house pill. Create it in
+`ha_secrets.xml`: a Home Assistant long-lived access token, for the Home Assist motion connection. Create it in
 Home Assistant under your profile, Security, Long-lived access tokens, named `MyTV`, and paste it between the
 `ha_token` tags. It is built into the APK, so rebuild every room after changing it, and delete the token in Home
 Assistant if it leaks.
@@ -274,7 +274,7 @@ the row shows at once. The account allows 5 streams at once.
 
 ## Beast page (all rooms)
 
-A **Beast** button in the top bar, next to Inputs, opens the [Mediarium](https://mediarium.app/) media-server
+A **Beast** item in the left drawer opens the [Mediarium](https://mediarium.app/) media-server
 panel full-screen at `http://xxx.xxx.xxx.15:8264/`. It is the real web panel in a locked-down WebView, so
 everything the panel can do (search, add, manage downloads) works from the couch.
 
@@ -291,7 +291,7 @@ everything the panel can do (search, add, manage downloads) works from the couch
 
 Turn it on or off per room in `mytv\<room>\config.xml`, then rebuild that room:
 
-- `beast_page` (`true`/`false`): shows the Beast button. `true` in all three rooms.
+- `beast_page` (`true`/`false`): enables Beast in the drawer. `true` in all three rooms.
 - `beast_url`: the address it opens. Empty hides the button even when `beast_page` is true.
 
 Because the panel is served over plain HTTP, the host `xxx.xxx.xxx.15` is allowed as a cleartext exception in

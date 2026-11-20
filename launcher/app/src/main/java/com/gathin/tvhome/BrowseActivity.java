@@ -34,7 +34,11 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -74,6 +78,7 @@ public class BrowseActivity extends Activity {
     private String badgeStream;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ExecutorService metadataPool = Executors.newFixedThreadPool(2);
     private final ExecutorService imagePool = Executors.newFixedThreadPool(2);
     private final Handler main = new Handler(Looper.getMainLooper());
     private final LruCache<String, Bitmap> images = new LruCache<String, Bitmap>(4 * 1024 * 1024) {
@@ -83,6 +88,8 @@ public class BrowseActivity extends Activity {
     private Section downloaded;
     private Section streaming;
     private EpisodePicker picker;
+    private final Map<String, TmdbClient.Info> infoCache = new HashMap<>();
+    private final Set<String> infoLoading = new HashSet<>();
 
     @Override
     protected void attachBaseContext(Context base) {
@@ -182,13 +189,16 @@ public class BrowseActivity extends Activity {
             try {
                 List<TmdbMovie> trending = tmdb.trendingWeek(STREAMING_LIMIT);
                 List<StreamMatch.Entry> entries = iptv.vodEntries();
+                int rank = 0;
                 for (TmdbMovie m : trending) {
+                    rank++;
                     IptvItem hit = StreamMatch.find(entries, m.title, m.year);
                     if (hit == null) continue;   // degrade gracefully: show only the titles the provider carries
                     String mime = "mkv".equals(hit.extension) ? "video/x-matroska" : "video/*";
                     String poster = TmdbClient.posterUrl(m.posterPath);
                     MediaItem mi = new MediaItem(MediaItem.Source.STREAM, "st:" + hit.streamId, m.title, m.year,
                             m.title, poster, hit.added, iptv.streamUrl(hit), mime, streamPlayer);
+                    mi.trendingRank = rank;
                     String bd = TmdbClient.backdropUrl(m.backdropPath);
                     mi.backdrop = bd == null ? "" : bd;
                     items.add(mi);
@@ -267,6 +277,7 @@ public class BrowseActivity extends Activity {
     protected void onDestroy() {
         super.onDestroy();
         worker.shutdownNow();
+        metadataPool.shutdownNow();
         imagePool.shutdownNow();
         images.evictAll();
     }
@@ -512,6 +523,7 @@ public class BrowseActivity extends Activity {
             h.name.setVisibility(series || it.poster == null || it.poster.isEmpty()
                     ? View.VISIBLE : View.INVISIBLE);
             h.badge.setText(it.source == MediaItem.Source.DOWNLOAD ? badgeDownload : badgeStream);
+            fetchInfo(it);
             h.sub.setVisibility(series ? View.VISIBLE : View.GONE);
             h.accent.setVisibility(series ? View.VISIBLE : View.GONE);
             if (series) h.sub.setText(newEpisodesText(it.newEpisodeCount));
@@ -537,6 +549,7 @@ public class BrowseActivity extends Activity {
         final TextView badge;
         final TextView sub;
         final View accent;
+        final TextView rating;
 
         CardHolder(View card) {
             super(card);
@@ -545,6 +558,7 @@ public class BrowseActivity extends Activity {
             badge = card.findViewWithTag("badge");
             sub = card.findViewWithTag("sub");
             accent = card.findViewWithTag("accent");
+            rating = card.findViewWithTag("rating");
             card.setOnFocusChangeListener((v, focused) -> {
                 float s = focused ? FOCUS_SCALE : 1f;
                 v.animate().scaleX(s).scaleY(s).setDuration(140).start();
@@ -641,6 +655,58 @@ public class BrowseActivity extends Activity {
         blp.setMargins(dp(4), dp(4), 0, 0);
         card.addView(badge, blp);
         return card;
+    }
+
+    private void fetchInfo(MediaItem item) {
+        if (tmdb == null) return;
+        String key = metadataKey(item);
+        if (infoCache.containsKey(key) || !infoLoading.add(key)) return;
+        metadataPool.execute(() -> {
+            TmdbClient.Info result = null;
+            try {
+                result = tmdb.lookup(item.title, item.year, item.isSeries, 0);
+            } catch (Exception ignored) {
+            }
+            TmdbClient.Info loaded = result;
+            main.post(() -> {
+                infoLoading.remove(key);
+                if (loaded != null) {
+                    item.certification = loaded.certification;
+                    infoCache.put(key, loaded);
+                    downloaded.adapter.notifyDataSetChanged();
+                    streaming.adapter.notifyDataSetChanged();
+                }
+            });
+        });
+    }
+
+    private static String metadataKey(MediaItem item) {
+        return (item.isSeries ? "tv|" : "mv|") + item.matchKey;
+    }
+
+    private TextView ratingBadge() {
+        TextView rating = new TextView(this);
+        rating.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9);
+        rating.setTextColor(Color.WHITE);
+        rating.setTypeface(UiFont.get(this, R.string.font_medium));
+        rating.setGravity(Gravity.CENTER);
+        rating.setIncludeFontPadding(false);
+        rating.setSingleLine(true);
+        rating.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(4));
+        bg.setColor(0xCC000000);
+        bg.setStroke(dp(1), 0xCCFFFFFF);
+        rating.setBackground(bg);
+        rating.setVisibility(View.GONE);
+        return rating;
+    }
+
+    private static void bindRating(TextView view, MediaItem item, TmdbClient.Info info) {
+        String rating = info == null ? item.certification : info.certification;
+        rating = TmdbClient.ratingChip(rating);
+        view.setText(rating);
+        view.setVisibility(rating.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     private StateListDrawable ring() {

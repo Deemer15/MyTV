@@ -20,6 +20,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.text.TextUtils;
+import android.text.Spannable;
+import android.text.SpannableStringBuilder;
 import android.util.AtomicFile;
 import android.util.Log;
 import android.util.LruCache;
@@ -49,9 +51,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -76,6 +80,23 @@ final class MediaRail {
         void onRailFocused();
         /** The focused item changed (for the home backdrop); null when focus leaves the rail or is the "Show more" tile. */
         default void onItemFocused(MediaItem item) {}
+        default void onRailMenu() {}
+    }
+
+    private void armMovieFocusTimeout() {
+        main.removeCallbacks(clearMovieFocus);
+        if (!showingShows && row.findFocus() != null) {
+            main.postDelayed(clearMovieFocus, MOVIE_FOCUS_IDLE_MS);
+        }
+    }
+
+    private void clearMovieFocusAfterIdle() {
+        if (released || !resumed || showingShows) return;
+        View focused = row.findFocus();
+        if (focused == null) return;
+        focused.clearFocus();
+        row.clearFocus();
+        enterMoviesIdle();
     }
 
     private static final String TAG = "MediaRail";
@@ -86,15 +107,13 @@ final class MediaRail {
     // Proportions taken from the cleanyourtv-ui fork's Explore spotlight (its L_CARD_H=442 cards: the featured one
     // ~940 wide, the "tall" peeks 320 wide — same height, bottom-aligned). Scaled to our band height: the hero is
     // ~2.13× its height wide; the peeks are ~0.72× its height wide and the SAME height as the hero.
-    private static final int CARD_W = 156, CARD_H = 216;
-    /** The big left-hand featured box: a wide (~2.13:1) hero, the same height as the peeks beside it. */
-    private static final int SHOWCASE_W = 460, SHOWCASE_H = 216;
+    private static final int CARD_W = 150, CARD_H = 195;
+    /** Full-width cinematic spotlight; poster rows below it. */
+    private static final int SHOWCASE_H = 190;
     /** Decode width for tile art: a bit above the featured tile's pixel size (biggest tile) so posters stay crisp
      *  without wasting memory — decoding far larger than needed both wastes RAM and thrashes the image cache. */
     private static final int ART_DECODE_W = 520;
-    private static final int GAP = 12, HEADER = 18, HEADER_GAP = 6;
-    /** Width (dp) of the soft fade on the strip's left edge, so a tile dissolves as it nears the showcase. */
-    private static final int FADE_W = 48;
+    private static final int GAP = 10, SECTION = 22, SECTION_GAP = 4;
     private static final float FOCUS_SCALE = 1.08f;
     /** The cache schema; readCache rejects any other header, so old "media-rail 1" files are simply ignored. */
     private static final String CACHE_HEADER = "media-rail 2";
@@ -111,8 +130,9 @@ final class MediaRail {
     /** Backdrop URLs found for "title|year" keys, so a showcased item is looked up at most once per session.
      *  "" is cached for a title with no TMDB backdrop, so we don't re-query it every time it is shown. */
     private final Map<String, String> backdropCache = new HashMap<>();
-    /** US age ratings found for "sort|title|year" keys (for example "PG-13"); "" means looked up, none rated. */
-    private final Map<String, String> certCache = new HashMap<>();
+    /** TMDB metadata found for "sort|title|year" keys. Null means not looked up yet. */
+    private final Map<String, TmdbClient.Info> metadataCache = new HashMap<>();
+    private final Set<String> metadataLoading = new HashSet<>();
     private final String downloadPlayer;
     private final String streamPlayer;
     private final int limit;
@@ -122,6 +142,7 @@ final class MediaRail {
     private final String badgeStream;
     private final AtomicFile cacheFile;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ExecutorService metadataPool = Executors.newFixedThreadPool(2);
     private final ExecutorService imagePool = Executors.newFixedThreadPool(2);
     private final Handler main = new Handler(Looper.getMainLooper());
     // Big enough to hold the featured tile plus the whole visible peek strip at ARGB_8888, so a sharp bitmap is
@@ -144,13 +165,23 @@ final class MediaRail {
     private Filter filter = Filter.ALL;
     /** The full merged list from the sources; the adapter holds only the current filter's subset. */
     private List<MediaItem> allItems = new ArrayList<>();
+    /** Hero rotation candidates. Shows remain in their own rail and never auto-enter the spotlight. */
+    private List<MediaItem> spotlightItems = new ArrayList<>();
+    private MediaItem heroItem;
     private final LinearLayout body;
     private final FrameLayout showcase;      // the big left box: the ONE focusable/clickable element in the rail
     private final ImageView showcaseImage;   // the big left showcase box's art
+    private final TextView showcaseRating;
     private final TextView featuredTitle;    // the showcase title
     private final TextView featuredSub;       // detail line: "year · source · added" or "N new episodes"
+    private final TextView featuredOverview;
     private final RecyclerView row;
-    private final Adapter adapter = new Adapter();
+    private final RecyclerView showsRow;
+    private final TextView recentLabel;
+    private final TextView showsLabel;
+    private boolean showingShows;
+    private final Adapter adapter = new Adapter(false);
+    private final Adapter showsAdapter = new Adapter(true);
 
     private long lastRefresh;
     private boolean released;
@@ -160,6 +191,7 @@ final class MediaRail {
      *  state (showcase shows a Show-more card, OK opens browse). The strip shows everything AFTER the selection, so
      *  the selected item is never duplicated as a peek tile. Left/Right move this; the strip never takes focus. */
     private int selected;
+    private boolean edgeLeftArmed;
     private EpisodePicker picker;
     /** True while the launcher is in front (between onResume/onPause). Rotation only runs while resumed, so a
      *  backgrounded Home does not keep posting advances. */
@@ -170,6 +202,8 @@ final class MediaRail {
      *  self-healing: the rail becomes rotatable only when resumed + placed + gridAtTop + visible all hold at once,
      *  a moment no single event reliably catches, so the beat simply keeps checking until they do. */
     private final Runnable rotateTick = this::rotateBeat;
+    private static final long MOVIE_FOCUS_IDLE_MS = 10_000;
+    private final Runnable clearMovieFocus = this::clearMovieFocusAfterIdle;
     private static final long ROTATE_BEAT_MS = 1_000;
     /** Idle time accumulated toward the next advance; reset to 0 whenever the user acts or rotation can't run. */
     private long idleMs;
@@ -243,8 +277,7 @@ final class MediaRail {
             }
         });
 
-        // Tab row (Explore / Movies / Shows) where the single header line used to be. The selected tab is bright;
-        // the rest are dim. Up from the showcase focuses this row; Left/Right here switch the filter live.
+        // Kept internally for compatibility with filtered layouts, but the redesigned Home has no visible tabs.
         tabRow = new LinearLayout(context);
         tabRow.setOrientation(LinearLayout.HORIZONTAL);
         tabRow.setFocusable(true);
@@ -271,10 +304,7 @@ final class MediaRail {
             tabs[i] = t;
         }
         paintTabs(false);
-        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(HEADER));
-        hp.bottomMargin = dp(HEADER_GAP);
-        hp.setMarginEnd(dp(66));
-        container.addView(tabRow, hp);
+        tabRow.setVisibility(View.GONE);
 
         // The body is a vertical stack: a big hero title + meta line over the backdrop (no poster tile — the
         // full-screen HomeBackdrop IS the hero), then the single poster row the D-pad scrolls through.
@@ -285,52 +315,31 @@ final class MediaRail {
 
         // The body is horizontal: a BIG showcase box on the left (the focused item, large) + the poster strip on
         // the right. Moving focus along the strip updates the showcase. This is the Apple-TV spotlight shape.
-        body.setOrientation(LinearLayout.HORIZONTAL);
+        body.setOrientation(LinearLayout.VERTICAL);
 
         // --- Left: the big showcase box — the ONE focusable, clickable element in the rail ---
         showcase = new FrameLayout(context);
-        showcase.setClipToOutline(true);
-        GradientDrawable showBg = new GradientDrawable();
-        showBg.setCornerRadius(dp(12));
-        showBg.setColor(0xFF161A22);
-        showcase.setBackground(showBg);
-        showcase.setFocusable(true);
-        showcase.setFocusableInTouchMode(false);
-        // A white ring while focused, like the peek tiles used to get, so the hero reads as the selected element.
-        showcase.setForeground(showcaseRing());
-        showcase.setOnClickListener(v -> activateSelected());
-        showcase.setOnFocusChangeListener((v, focused) -> {
-            if (focused) {
-                host.onRailFocused();
-                bindSelected();                       // make sure the showcase and backdrop match the selection
-            }
-            rescheduleRotation();   // pause while the user holds the showcase; resume the clock when focus leaves
-        });
-        showcase.setOnKeyListener((v, keyCode, event) -> onShowcaseKey(keyCode, event));
+        showcase.setClipToOutline(false);
+        showcase.setFocusable(false);
+        showcase.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
 
         showcaseImage = new ImageView(context);
         showcaseImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
         showcaseImage.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         showcase.addView(showcaseImage, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        showcaseImage.setVisibility(View.GONE);
 
-        // Bottom scrim so the title/meta stay readable over the art.
-        View showScrim = new View(context);
-        showScrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[] {0x00000000, 0x66000000, 0xF0000000}));
-        showScrim.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        FrameLayout.LayoutParams scrimLp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(SHOWCASE_H * 60 / 100));
-        scrimLp.gravity = Gravity.BOTTOM;
-        showcase.addView(showScrim, scrimLp);
+        showcaseRating = ratingBadge(context);
+        showcaseRating.setVisibility(View.GONE);
 
         LinearLayout showText = new LinearLayout(context);
         showText.setOrientation(LinearLayout.VERTICAL);
-        showText.setPadding(dp(14), dp(10), dp(14), dp(14));
+        showText.setPadding(dp(48), dp(10), dp(14), dp(12));
         showText.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
 
         featuredTitle = new TextView(context);
-        featuredTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        featuredTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
         featuredTitle.setTextColor(Color.WHITE);
         featuredTitle.setTypeface(UiFont.get(context, R.string.font_medium));
         featuredTitle.setMaxLines(2);
@@ -349,54 +358,81 @@ final class MediaRail {
         fsLp.topMargin = dp(3);
         showText.addView(featuredSub, fsLp);
 
+        featuredOverview = new TextView(context);
+        featuredOverview.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        featuredOverview.setTextColor(0xD9FFFFFF);
+        featuredOverview.setTypeface(UiFont.get(context, R.string.font_regular));
+        featuredOverview.setMaxLines(3);
+        featuredOverview.setEllipsize(TextUtils.TruncateAt.END);
+        featuredOverview.setLineSpacing(dp(2), 1f);
+        LinearLayout.LayoutParams overviewLp = new LinearLayout.LayoutParams(
+                dp(470), ViewGroup.LayoutParams.WRAP_CONTENT);
+        overviewLp.topMargin = dp(8);
+        showText.addView(featuredOverview, overviewLp);
+
         FrameLayout.LayoutParams stLp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         stLp.gravity = Gravity.BOTTOM;
         showcase.addView(showText, stLp);
 
-        LinearLayout.LayoutParams showLp = new LinearLayout.LayoutParams(dp(SHOWCASE_W), dp(SHOWCASE_H));
-        showLp.setMarginEnd(dp(28));
+        LinearLayout.LayoutParams showLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(SHOWCASE_H));
+        showLp.setMarginEnd(dp(16));
         // Keep the showcase drawn above the strip as a backstop; the strip's left-edge fade (FadeEdgeFrame) is the
         // primary treatment, so a tile is already faded out before it could reach the showcase.
         showcase.setTranslationZ(dp(10));
         body.addView(showcase, showLp);
 
-        // --- Right: the poster strip ---
+        recentLabel = sectionLabel(R.string.explore_row_movies, "Recently Added");
+        LinearLayout.LayoutParams recentLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(SECTION));
+        recentLp.topMargin = dp(10);
+        recentLp.leftMargin = dp(48);
+        body.addView(recentLabel, recentLp);
+
+        // Recently Added rail beneath the spotlight.
         row = new RecyclerView(context);
         row.setLayoutManager(new LinearLayoutManager(context, RecyclerView.HORIZONTAL, false));
         row.setClipChildren(false);
         row.setClipToPadding(false);
-        // No vertical padding: the peek posters must be the same height as the showcase and share its top/bottom
-        // line (the strip never takes focus, so there is no focus-scale to leave headroom for). Left padding keeps
-        // the first card off the showcase; right padding lets the last cards run under the screen edge.
-        row.setPaddingRelative(dp(22), 0, dp(66), 0);
+        row.setPaddingRelative(dp(48), dp(10), dp(16), 0);
         row.setOverScrollMode(View.OVER_SCROLL_NEVER);
         row.setHorizontalScrollBarEnabled(false);
         row.setItemAnimator(null);
-        // The strip is preview art only: focus never enters it, the showcase is the single focusable element.
-        row.setFocusable(false);
-        row.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+        row.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
         row.setAdapter(adapter);
+        LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(CARD_H));
+        body.addView(row, rp);
 
-        // Wrap the strip in a left-edge fade so a tile scrolled toward the showcase dissolves into the gap
-        // instead of hard-clipping or tucking behind the showcase. The fade width matches the gap the showcase
-        // leaves, so a poster is fully faded by the time it would reach the showcase.
-        FadeEdgeFrame fade = new FadeEdgeFrame(context, dp(FADE_W));
-        fade.setClipChildren(false);
-        fade.setClipToPadding(false);
-        fade.addView(row, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        // The strip is exactly the showcase's height so the peeks and the hero share the same top and bottom line.
-        LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(0, dp(SHOWCASE_H), 1f);
-        rp.gravity = Gravity.BOTTOM;
-        body.addView(fade, rp);
+        showsLabel = sectionLabel(R.string.explore_row_shows, "Shows");
+        LinearLayout.LayoutParams showsLabelLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(SECTION));
+        showsLabelLp.topMargin = dp(SECTION_GAP + 4);
+        showsLabelLp.leftMargin = dp(48);
+        body.addView(showsLabel, showsLabelLp);
+
+        showsRow = new RecyclerView(context);
+        showsRow.setLayoutManager(new LinearLayoutManager(context, RecyclerView.HORIZONTAL, false));
+        showsRow.setClipChildren(false);
+        showsRow.setClipToPadding(false);
+        showsRow.setPaddingRelative(dp(48), dp(10), dp(16), 0);
+        showsRow.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        showsRow.setHorizontalScrollBarEnabled(false);
+        showsRow.setItemAnimator(null);
+        showsRow.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+        showsRow.setAdapter(showsAdapter);
+        body.addView(showsRow, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(CARD_H)));
+        showsLabel.setVisibility(View.GONE);
+        showsRow.setVisibility(View.GONE);
 
         container.addView(body, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height());
         lp.gravity = Gravity.TOP | Gravity.START;
-        lp.setMarginStart(dp(66));
+        lp.setMarginStart(0);
         int at = root.indexOfChild(above);
         root.addView(container, at < 0 ? root.getChildCount() : at, lp);
 
@@ -407,8 +443,7 @@ final class MediaRail {
     // ---- placement and visibility ----------------------------------------------------------------
 
     int height() {
-        // header + the big featured wide tile (the tallest element) + room for its caption below.
-        return dp(HEADER + HEADER_GAP + SHOWCASE_H + 40);
+        return dp(SHOWCASE_H + SECTION + CARD_H + 14);
     }
 
     /** The rail band's pixel height — Home uses it to leave room above the dock so the band never overlaps it. */
@@ -423,12 +458,13 @@ final class MediaRail {
         updateVisibility();
     }
 
+    void placeBelowHeader(float headerBottom) {
+        container.setY(headerBottom + dp(8));
+        placed = true;
+        updateVisibility();
+    }
+
     void setGridAtTop(boolean atTop) {
-        if (gridAtTop == atTop) {
-            updateVisibility();   // still re-assert: the container may have been left GONE by a prior transition
-            return;
-        }
-        gridAtTop = atTop;
         updateVisibility();
     }
 
@@ -456,7 +492,7 @@ final class MediaRail {
         // Focus the showcase once it has been laid out (post handles the resume frame not being drawn yet).
         container.post(() -> {
             if (!released && wantsFocusOnResume == false && container.getVisibility() == View.VISIBLE) {
-                focus();
+                focusMovies();
             }
         });
         return true;
@@ -498,25 +534,79 @@ final class MediaRail {
         // selected item is the last one (empty strip) — as on the last movie, or the single item in Shows. The
         // rail is still on screen and focusable then (the showcase holds that item), so keying off the peek count
         // made Up from the grid skip the rail and land on the top bar.
-        return container.getVisibility() == View.VISIBLE && itemCount() > 0 && gridAtTop;
+        return container.getVisibility() == View.VISIBLE && itemCount() > 0;
+    }
+
+    boolean isShowsActive() {
+        return showingShows;
     }
 
     void focus() {
         if (itemCount() == 0) return;
+        updateVisibility();
         container.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
-        // With the Home/Explore tabs, land on the tab row (Home) by default, not the showcase; the user drops into
-        // the rail with Down. Without explore_page the showcase is the primary control, so focus it as before.
-        if (explorePage) {
-            paintTabs(true);
-            tabRow.requestFocus();
-        } else {
-            showcase.requestFocus();
+        gridAtTop = true;
+        focusFirst(showingShows ? showsRow : row);
+    }
+
+    void focusShows() {
+        updateVisibility();
+        if (showsAdapter.getItemCount() == 0) {
+            focus();
+            return;
         }
+        if (!showingShows) switchRail(true, true);
+        else focusFirst(showsRow);
+        main.removeCallbacks(rotateTick);
+        idleMs = 0;
+    }
+
+    void focusMovies() {
+        boolean wasShows = showingShows;
+        updateVisibility();
+        if (showingShows) switchRail(false, false);
+        enterMoviesIdle();
+        if (wasShows) onResumed();
+    }
+
+    void enterMoviesIdle() {
+        container.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+        if (getCurrentFocusedView() != null) getCurrentFocusedView().clearFocus();
+        idleMs = 0;
+        main.removeCallbacks(rotateTick);
+        if (resumed && !released) main.postDelayed(rotateTick, ROTATE_BEAT_MS);
+    }
+
+    boolean isMoviesIdle() {
+        return !showingShows && row.findFocus() == null;
+    }
+
+    void focusMoviesFromIdle(KeyEvent event) {
+        focusFirst(row);
+        row.post(() -> {
+            RecyclerView.ViewHolder holder = row.findViewHolderForAdapterPosition(0);
+            if (holder != null && holder.itemView.isFocused()) {
+                holder.itemView.dispatchKeyEvent(event);
+            }
+        });
+    }
+
+    private View getCurrentFocusedView() {
+        if (row.hasFocus()) return row.getFocusedChild();
+        if (showsRow.hasFocus()) return showsRow.getFocusedChild();
+        return container.findFocus();
+    }
+
+    void recoverFromApps() {
+        placed = true;
+        gridAtTop = true;
+        updateVisibility();
+        container.post(this::focus);
     }
 
     /** Number of real media items (not counting the Show-more state). */
     private int itemCount() {
-        return adapter.items.size();
+        return spotlightItems.size();
     }
 
     /** The highest selectable index: the Show-more state sits one past the last item. */
@@ -542,10 +632,10 @@ final class MediaRail {
         boolean rtl = showcase.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
         switch (keyCode) {
             case KeyEvent.KEYCODE_DPAD_UP:
-                tabRow.requestFocus();   // Up from the showcase goes to the tab row
+                host.onRailUp();
                 return true;
             case KeyEvent.KEYCODE_DPAD_DOWN:
-                host.onRailDown();
+                focusFirst(row);
                 return true;
             case KeyEvent.KEYCODE_DPAD_LEFT:
                 return moveSelection(rtl ? +1 : -1);
@@ -698,6 +788,8 @@ final class MediaRail {
         return resumed && !released
                 && container.getVisibility() == View.VISIBLE && gridAtTop && placed
                 && picker == null
+                && !showingShows
+                && row.findFocus() == null && showsRow.findFocus() == null
                 && itemCount() >= 2;
     }
 
@@ -710,13 +802,13 @@ final class MediaRail {
     private void fadeToNext() {
         int n = itemCount();
         if (n < 2) return;
-        body.animate().cancel();
-        body.animate().alpha(0f).setDuration(ROTATE_FADE_MS).withEndAction(() -> {
+        showcase.animate().cancel();
+        showcase.animate().alpha(0f).setDuration(ROTATE_FADE_MS).withEndAction(() -> {
             if (released) return;
             selected = (selected + 1) % itemCount();   // wraps the last item back to 0; Show-more is skipped
             bindSelected();
-            body.setAlpha(0f);
-            body.animate().alpha(1f).setDuration(ROTATE_FADE_MS).start();
+            showcase.setAlpha(0f);
+            showcase.animate().alpha(1f).setDuration(ROTATE_FADE_MS).start();
         }).start();
     }
 
@@ -739,6 +831,7 @@ final class MediaRail {
         idleMs = 0;
         main.removeCallbacks(rotateTick);
         main.postDelayed(rotateTick, ROTATE_BEAT_MS);
+        armMovieFocusTimeout();
     }
 
     /** Home paused/stopped: stop the heartbeat so a backgrounded launcher doesn't keep stepping the showcase, and
@@ -746,6 +839,7 @@ final class MediaRail {
     void onPaused() {
         resumed = false;
         main.removeCallbacks(rotateTick);
+        main.removeCallbacks(clearMovieFocus);
         body.animate().cancel();
         body.setAlpha(1f);
     }
@@ -757,7 +851,7 @@ final class MediaRail {
             return;
         }
         if (selected < 0 || selected >= itemCount()) return;
-        open(adapter.items.get(selected), showcase);
+        open(spotlightItems.get(selected), showcase);
     }
 
     /** Points the showcase, the strip (everything after the selection) and the home backdrop at the current
@@ -772,22 +866,24 @@ final class MediaRail {
         selected = Math.max(0, Math.min(maxSelected(), selected));
         if (isShowMoreSelected()) {
             bindShowMore();
-            host.onItemFocused(adapter.items.get(0));   // keep a sensible backdrop behind the Show-more card
+            host.onItemFocused(spotlightItems.get(0));   // keep a sensible backdrop behind the Show-more card
         } else {
-            MediaItem it = adapter.items.get(selected);
+            MediaItem it = spotlightItems.get(selected);
             bindFeatured(it);
             host.onItemFocused(it);
         }
         // The strip previews everything AFTER the selection, then the Show-more tile; so the selected item is
         // never duplicated as a peek. At the Show-more state the strip is empty.
-        adapter.setStart(Math.min(selected + 1, n));
+        adapter.setStart(0);
     }
 
     /** Dresses the showcase as the "Show more" card: the newest item's art kept dimmed behind the label, so the
      *  box reads as a real "see everything" card rather than an empty box. */
     private void bindShowMore() {
-        if (!adapter.items.isEmpty()) {
-            loadImage(showcaseImage, wideArt(adapter.items.get(0)));
+        heroItem = null;
+        showcaseRating.setVisibility(View.GONE);
+        if (!spotlightItems.isEmpty()) {
+            loadImage(showcaseImage, wideArt(spotlightItems.get(0)));
             showcaseImage.setAlpha(0.35f);         // dim the art so the "Show more" label clearly leads
         } else {
             showcaseImage.setImageDrawable(null);
@@ -808,7 +904,7 @@ final class MediaRail {
         // Show whenever the rail has any data at all (across filters), not just the current filter. An empty tab
         // (e.g. Shows with no series) must keep the rail and its tabs on screen with the empty message, so the
         // user can switch back; it must not tear the whole rail down.
-        boolean show = placed && gridAtTop && !allItems.isEmpty();
+        boolean show = placed && !allItems.isEmpty();
         boolean visible = container.getVisibility() == View.VISIBLE && container.getAlpha() > 0f;
         if (show == visible) {
             // Already in the right state, but a prior animation may have left alpha mid-way or a pending
@@ -908,19 +1004,31 @@ final class MediaRail {
     void release() {
         released = true;
         main.removeCallbacks(rotateTick);
+        main.removeCallbacks(clearMovieFocus);
         dismissPicker();
         worker.shutdownNow();
+        metadataPool.shutdownNow();
         imagePool.shutdownNow();
         images.evictAll();
     }
 
     private void apply(List<MediaItem> items) {
+        boolean firstData = allItems.isEmpty();
         allItems = items;
-        adapter.setItems(filtered());
+        List<MediaItem> recent = new ArrayList<>();
+        List<MediaItem> shows = new ArrayList<>();
+        for (MediaItem item : items) {
+            if (item.isSeries) shows.add(item);
+            else recent.add(item);
+        }
+        spotlightItems = new ArrayList<>(recent);
+        adapter.setItems(recent);
+        showsAdapter.setItems(shows);
         selected = Math.max(0, Math.min(maxSelected(), selected));
         bindSelected();
         updateVisibility();
         rescheduleRotation();   // first data (or a refresh) may make rotation possible for the first time
+        if (firstData) container.post(this::focus);
     }
 
     private List<MediaItem> readCache() {
@@ -1065,12 +1173,14 @@ final class MediaRail {
             Toast.makeText(context, R.string.media_rail_picker_empty, Toast.LENGTH_SHORT).show();
             return;
         }
-        if (eps.size() == 1) {
-            BeastClient.Episode only = eps.get(0);
-            play(only.url, only.mime, item.title, item.player);
-            return;
+        wantsFocusOnResume = true;
+        Intent show = new Intent(context, ExploreActivity.class)
+                .putExtra(ExploreActivity.EXTRA_SHOW_ID, item.id);
+        try {
+            context.startActivity(show);
+        } catch (ActivityNotFoundException | SecurityException e) {
+            Toast.makeText(context, R.string.media_rail_no_player, Toast.LENGTH_SHORT).show();
         }
-        showPicker(item, origin);
     }
 
     /** Opens the full browse view (Tier 2): the full download library plus TMDB trending matched to streams. */
@@ -1320,13 +1430,13 @@ final class MediaRail {
     /** True when {@code it} is the item currently featured in the showcase (guards a late backdrop from
      *  overwriting a newer selection the user has since moved to). */
     private boolean isSelected(MediaItem it) {
-        return !isShowMoreSelected() && itemCount() > 0
-                && selected >= 0 && selected < adapter.items.size()
-                && adapter.items.get(selected) == it;
+        return itemCount() > 0 && heroItem == it;
     }
 
     /** The showcase when the chosen tab has no items (e.g. no Shows yet): a short message, no art, no backdrop. */
     private void bindEmptyFilter() {
+        heroItem = null;
+        showcaseRating.setVisibility(View.GONE);
         showcaseImage.setAlpha(1f);
         showcaseImage.setImageDrawable(null);
         showcaseImage.setTag(null);
@@ -1334,71 +1444,113 @@ final class MediaRail {
                 : filter == Filter.MOVIES ? R.string.media_rail_empty_movies
                 : R.string.media_rail_empty);
         featuredSub.setText("");
+        featuredOverview.setText("");
         host.onItemFocused(null);   // clear the full-screen backdrop; nothing to show behind an empty tab
     }
 
     private void bindFeatured(MediaItem it) {
+        heroItem = it;
         showcaseImage.setAlpha(1f);   // restore full art (the Show-more state dims it)
         if (it == null) {
             featuredTitle.setText("");
             featuredSub.setText("");
             showcaseImage.setImageDrawable(null);
             showcaseImage.setTag(null);
+            showcaseRating.setVisibility(View.GONE);
             return;
         }
         loadImage(showcaseImage, wideArt(it));
         maybeFetchBackdrop(it);   // the provider gave only a poster: fill a wide 16:9 backdrop from TMDB if we can
-        featuredTitle.setText(it.title);
-        String cert = certCache.get(certKey(it));
-        featuredSub.setText(detailLine(it, cert == null ? "" : cert));
-        maybeFetchCertification(it);   // the age rating (PG-13, TV-MA, ...) joins the line once TMDB answers
+        featuredTitle.setText(it.isSeries ? it.title : it.spotlightTitle());
+        TmdbClient.Info info = metadataCache.get(metadataKey(it));
+        showcaseRating.setVisibility(View.GONE);
+        featuredSub.setText(detailLine(it, info));
+        featuredOverview.setText(info == null ? "" : info.overview);
+        maybeFetchMetadata(it);
     }
 
     /** Detail line under the title: "year" or "N new episodes", then the age rating when known, the source and when
      *  it was added. */
-    private String detailLine(MediaItem it, String cert) {
+    private CharSequence detailLine(MediaItem it, TmdbClient.Info info) {
         List<String> parts = new ArrayList<>();
         if (it.isSeries) {
+            parts.add(it.title);
             parts.add(newEpisodesText(it.newEpisodeCount));
-        } else if (it.year > 0) {
-            parts.add(String.valueOf(it.year));
         }
-        if (!cert.isEmpty()) parts.add(cert);
+        int year = it.year > 0 ? it.year : info == null ? 0 : info.year;
+        if (year > 0) parts.add(String.valueOf(year));
+        if (info != null) {
+            String runtime = TmdbClient.runtimeText(info.runtime);
+            if (!runtime.isEmpty()) parts.add(runtime);
+        }
         parts.add(it.source == MediaItem.Source.DOWNLOAD ? badgeDownload : badgeStream);
         String added = addedText(it.added);
         if (!added.isEmpty()) parts.add(added);
-        return String.join("  ·  ", parts);
+        SpannableStringBuilder line = new SpannableStringBuilder();
+        for (int i = 0; i < parts.size(); i++) {
+            if (i > 0) line.append("  \u00B7  ");
+            line.append(parts.get(i));
+        }
+        if (info != null) {
+            String certification = TmdbClient.ratingChip(info.certification);
+            if (!certification.isEmpty()) {
+                if (line.length() > 0) line.append("  ");
+                int start = line.length();
+                line.append(certification);
+                line.setSpan(new RoundedBadgeSpan(context, false), start, line.length(),
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+            if (info.rating > 0) {
+                if (line.length() > 0) line.append("  ");
+                int start = line.length();
+                line.append("TMDb");
+                line.setSpan(new RoundedBadgeSpan(context, true), start, line.length(),
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+                line.append(" ").append(String.format(java.util.Locale.US, "%.1f", info.rating));
+            }
+        }
+        return line;
     }
 
-    private static String certKey(MediaItem it) {
+    private static String metadataKey(MediaItem it) {
         return (it.isSeries ? "tv|" : "mv|") + it.title + "|" + it.year;
     }
 
     /**
-     * The US age rating for the showcased title, from TMDB (off the main thread), cached per title and year. When it
-     * comes back and the same item is still showing, the detail line is redrawn with it. A failed lookup is not
-     * cached, so the next time the item is shown it is tried again.
+     * Runtime, age rating and score for the showcased title, from TMDB and cached per title and year.
      */
-    private void maybeFetchCertification(MediaItem it) {
+    private void maybeFetchMetadata(MediaItem it) {
         if (tmdb == null || it == null) return;
-        String key = certKey(it);
-        if (certCache.containsKey(key)) return;
+        String key = metadataKey(it);
+        if (metadataCache.containsKey(key) || !metadataLoading.add(key)) return;
         final String title = it.title;
         final int year = it.year;
         final boolean series = it.isSeries;
-        worker.execute(() -> {
-            String cert;
+        metadataPool.execute(() -> {
+            TmdbClient.Info result;
             try {
-                TmdbClient.Info info = tmdb.lookup(title, year, series, 0);
-                cert = info == null ? "" : info.certification;
+                result = tmdb.lookup(title, year, series, 0);
             } catch (Exception e) {
+                main.post(() -> metadataLoading.remove(key));
                 return;
             }
-            final String result = cert;
+            if (result == null) {
+                main.post(() -> metadataLoading.remove(key));
+                return;
+            }
             main.post(() -> {
+                metadataLoading.remove(key);
                 if (released) return;
-                certCache.put(key, result);
-                if (!result.isEmpty() && isSelected(it)) featuredSub.setText(detailLine(it, result));
+                metadataCache.put(key, result);
+                for (MediaItem item : allItems) {
+                    if (metadataKey(item).equals(key)) item.certification = result.certification;
+                }
+                if (isSelected(it)) {
+                    showcaseRating.setVisibility(View.GONE);
+                    featuredSub.setText(detailLine(it, result));
+                    featuredOverview.setText(result.overview);
+                }
+                adapter.notifyDataSetChanged();
             });
         });
     }
@@ -1447,18 +1599,53 @@ final class MediaRail {
         return Math.round(v * density);
     }
 
+    private static TextView ratingBadge(Context context) {
+        TextView rating = new TextView(context);
+        rating.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9);
+        rating.setTextColor(Color.WHITE);
+        rating.setTypeface(UiFont.get(context, R.string.font_medium));
+        rating.setGravity(Gravity.CENTER);
+        rating.setIncludeFontPadding(false);
+        rating.setSingleLine(true);
+        rating.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dpValue(context, 4));
+        bg.setColor(0xCC000000);
+        bg.setStroke(dpValue(context, 1), 0xCCFFFFFF);
+        rating.setBackground(bg);
+        rating.setVisibility(View.GONE);
+        return rating;
+    }
+
+    private static int dpValue(Context context, float value) {
+        return Math.round(value * context.getResources().getDisplayMetrics().density);
+    }
+
+    private static void bindRating(TextView view, MediaItem item) {
+        bindRating(view, item, null);
+    }
+
+    private static void bindRating(TextView view, MediaItem item, TmdbClient.Info info) {
+        String rating = info == null ? item.certification : info.certification;
+        rating = TmdbClient.ratingChip(rating);
+        view.setText(rating);
+        view.setVisibility(rating.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
     // ---- cards -----------------------------------------------------------------------------------
 
     private static final int TYPE_MEDIA = 0;
 
     private final class Adapter extends RecyclerView.Adapter<Holder> {
         private final List<MediaItem> items = new ArrayList<>();
+        private final boolean showsOnly;
         /** First item index the strip shows: it previews everything from here on (the selection + 1), so the
          *  selected item is never duplicated as a peek. When start == items.size() the strip is empty — the
          *  "Show more" state lives only in the showcase, never as a strip tile. */
         private int start;
 
-        Adapter() {
+        Adapter(boolean showsOnly) {
+            this.showsOnly = showsOnly;
             setHasStableIds(true);
         }
 
@@ -1479,7 +1666,7 @@ final class MediaRail {
             if (clamped == start) return;
             start = clamped;
             notifyDataSetChanged();
-            row.scrollToPosition(0);   // the new first preview is always shown from the strip's left edge
+            (showsOnly ? showsRow : row).scrollToPosition(0);
         }
 
         /** Preview items shown: those from {@code start} to the end. The strip is media posters only — there is
@@ -1514,15 +1701,38 @@ final class MediaRail {
             MediaItem it = items.get(itemIndexFor(position));
             h.itemView.setContentDescription(null);
             boolean series = it.isSeries;
-            h.name.setText(it.title);
+            h.name.setText(it.spotlightTitle());
             h.name.setVisibility(series || it.poster == null || it.poster.isEmpty() ? View.VISIBLE : View.INVISIBLE);
             h.badge.setText(it.source == MediaItem.Source.DOWNLOAD ? badgeDownload : badgeStream);
+            maybeFetchMetadata(it);
             if (h.sub != null) {
                 h.sub.setVisibility(series ? View.VISIBLE : View.GONE);
                 if (series) h.sub.setText(newEpisodesText(it.newEpisodeCount));
             }
             if (h.accent != null) h.accent.setVisibility(series ? View.VISIBLE : View.GONE);
             loadImage(h.image, it.poster != null && !it.poster.isEmpty() ? it.poster : wideArt(it));
+            h.itemView.setOnClickListener(v -> open(it, h.itemView));
+            h.itemView.setOnKeyListener((v, keyCode, event) -> onCardKey(keyCode, event, showsOnly, h, it));
+            h.itemView.setOnFocusChangeListener((v, focused) -> {
+                float scale = focused ? 1.07f : 1f;
+                v.animate().scaleX(scale).scaleY(scale).setDuration(120).start();
+                v.setElevation(focused ? dp(5) : 0f);
+                if (focused) {
+                    if (!showsOnly) armMovieFocusTimeout();
+                    host.onRailFocused();
+                    gridAtTop = true;
+                    edgeLeftArmed = false;
+                        if (!it.isSeries) {
+                            int index = spotlightItems.indexOf(it);
+                            if (index >= 0) selected = index;
+                        }
+                    bindFeatured(it);
+                    host.onItemFocused(it);
+                    idleMs = 0;
+                    main.removeCallbacks(rotateTick);
+                    main.postDelayed(rotateTick, ROTATE_BEAT_MS);
+                }
+            });
         }
     }
 
@@ -1532,6 +1742,7 @@ final class MediaRail {
         final TextView name;
         final TextView badge;
         final TextView sub;
+        final TextView rating;
         final View accent;
         final int type;
 
@@ -1542,11 +1753,13 @@ final class MediaRail {
             name = card.findViewWithTag("name");
             badge = card.findViewWithTag("badge");
             sub = card.findViewWithTag("sub");
+            rating = card.findViewWithTag("rating");
             accent = card.findViewWithTag("accent");
             if (image != null) image.setTag(null);
             if (name != null) name.setTag(null);
             if (badge != null) badge.setTag(null);
             if (sub != null) sub.setTag(null);
+            if (rating != null) rating.setTag(null);
             if (accent != null) accent.setTag(null);
         }
     }
@@ -1554,9 +1767,11 @@ final class MediaRail {
     /** One peek card: a rounded 2:3 poster, a source badge in the top-left corner. Preview only — not focusable. */
     private View buildCard() {
         FrameLayout card = new FrameLayout(context);
-        card.setFocusable(false);
-        card.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        card.setFocusable(true);
+        card.setFocusableInTouchMode(false);
+        card.setClipToPadding(false);
         card.setClipChildren(false);
+        card.setForeground(showcaseRing());
         RecyclerView.LayoutParams lp = new RecyclerView.LayoutParams(dp(CARD_W), dp(CARD_H));
         lp.setMarginEnd(dp(GAP));
         card.setLayoutParams(lp);
@@ -1640,6 +1855,117 @@ final class MediaRail {
         blp.setMargins(dp(4), dp(4), 0, 0);
         card.addView(badge, blp);
         return card;
+    }
+
+    private TextView sectionLabel(int fallbackRes, String label) {
+        TextView text = new TextView(context);
+        text.setText(label);
+        if (fallbackRes != 0 && context.getString(fallbackRes).isEmpty()) {
+            text.setText(fallbackRes);
+        }
+        text.setTextColor(0xE6FFFFFF);
+        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        text.setTypeface(UiFont.get(context, R.string.font_medium));
+        text.setLetterSpacing(0.04f);
+        return text;
+    }
+
+    private boolean onCardKey(int keyCode, KeyEvent event, boolean fromShows, Holder holder, MediaItem item) {
+        if (event.getAction() != KeyEvent.ACTION_DOWN) {
+            return keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN;
+        }
+        if (!fromShows) armMovieFocusTimeout();
+        if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+            host.onRailUp();
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+            open(item, null);
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+            RecyclerView owner = fromShows ? showsRow : row;
+            int position = holder.getBindingAdapterPosition();
+            if (position == RecyclerView.NO_POSITION) return true;
+            int delta = keyCode == KeyEvent.KEYCODE_DPAD_LEFT ? -1 : 1;
+            int next = position + delta;
+            int count = owner.getAdapter() == null ? 0 : owner.getAdapter().getItemCount();
+            if (next >= 0 && next < count) {
+                edgeLeftArmed = false;
+                owner.scrollToPosition(next);
+                owner.post(() -> {
+                    RecyclerView.ViewHolder nextHolder = owner.findViewHolderForAdapterPosition(next);
+                    if (nextHolder != null) nextHolder.itemView.requestFocus();
+                });
+            } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                if (edgeLeftArmed) {
+                    edgeLeftArmed = false;
+                    host.onRailMenu();
+                } else {
+                    edgeLeftArmed = true;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private void focusFirst(RecyclerView target) {
+        container.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+        gridAtTop = true;
+        target.postOnAnimation(new Runnable() {
+            int tries;
+            @Override public void run() {
+                RecyclerView.ViewHolder holder = target.findViewHolderForAdapterPosition(0);
+                if (holder != null && holder.itemView.requestFocus()) return;
+                if (tries++ < 12 && target.getAdapter() != null
+                        && target.getAdapter().getItemCount() > 0) {
+                    target.postOnAnimation(this);
+                }
+            }
+        });
+    }
+
+    private void switchRail(boolean shows, boolean focus) {
+        if (showingShows == shows) {
+            if (focus) focusFirst(shows ? showsRow : row);
+            return;
+        }
+        showingShows = shows;
+        if (shows) main.removeCallbacks(clearMovieFocus);
+        View outgoingLabel = shows ? recentLabel : showsLabel;
+        View outgoingRow = shows ? row : showsRow;
+        View incomingLabel = shows ? showsLabel : recentLabel;
+        View incomingRow = shows ? showsRow : row;
+        float direction = shows ? -1f : 1f;
+        incomingLabel.setVisibility(View.VISIBLE);
+        incomingRow.setVisibility(View.VISIBLE);
+        incomingLabel.setTranslationX(0f);
+        incomingRow.setTranslationX(0f);
+        incomingLabel.setAlpha(0f);
+        incomingRow.setAlpha(0f);
+        incomingLabel.setTranslationY(-direction * dp(12));
+        incomingRow.setTranslationY(-direction * dp(12));
+        outgoingLabel.animate().alpha(0f).translationY(direction * dp(12)).setDuration(160).start();
+        outgoingRow.animate().alpha(0f).translationY(direction * dp(12)).setDuration(160)
+                .withEndAction(() -> {
+                    outgoingLabel.setVisibility(View.GONE);
+                    outgoingRow.setVisibility(View.GONE);
+                    outgoingLabel.setTranslationY(0f);
+                    outgoingRow.setTranslationY(0f);
+                    outgoingLabel.setAlpha(1f);
+                    outgoingRow.setAlpha(1f);
+                    incomingLabel.animate().alpha(1f).translationY(0f).setDuration(180).start();
+                    incomingRow.animate().alpha(1f).translationY(0f).setDuration(180)
+                            .withEndAction(() -> {
+                                if (focus && showingShows == shows) {
+                                    focusFirst(shows ? showsRow : row);
+                                }
+                            }).start();
+                }).start();
     }
 
     /** The white focus ring drawn over the showcase while it holds focus (its rounded corners match the box). */

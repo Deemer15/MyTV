@@ -214,6 +214,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private final Map<String, String> launchActions;
     /** Hold OK opens the activity's tile menu (config.xml, tile_menu); false opens App info, as before. */
     private final boolean tileMenu;
+    private final boolean catalogueMode;
     /** Tile names and bundled banners that replace the app's own (config.xml, app_labels and app_banners). */
     private final Map<String, String> appLabels, appBanners;
     /** Every app tile is its icon on a card tinted from that icon, never its banner (config.xml, uniform_tiles). */
@@ -223,6 +224,12 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private final List<Entry> items = new ArrayList<>();
 
     AppAdapter(Context ctx, TileListener listener, int dockSize, Config cfg) {
+        this(ctx, listener, dockSize, cfg, false);
+    }
+
+    /** Same launcher tiles in a standalone catalogue: plain grid spacing and visible names, no dock semantics. */
+    AppAdapter(Context ctx, TileListener listener, int dockSize, Config cfg, boolean catalogueMode) {
+        this.catalogueMode = catalogueMode;
         this.ctx = ctx;
         this.listener = listener;
         this.dockSize = dockSize;
@@ -232,15 +239,15 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         this.libraryPreload = new HashSet<>(cfg.libraryApps);
         this.animations = cfg.animations;
         this.advancedEffects = cfg.animations && cfg.advancedEffects;
-        this.showHomeSettings = cfg.showHomeSettingsShortcut;
-        this.showLibrary = LibraryApps.showPill(cfg.appLibrary, cfg.libraryButton, cfg.showLibraryPill);
+        this.showHomeSettings = !catalogueMode && cfg.showHomeSettingsShortcut;
+        this.showLibrary = !catalogueMode && LibraryApps.showPill(cfg.appLibrary, cfg.libraryButton, cfg.showLibraryPill);
         this.reducedMotion = cfg.reducedMotion;
         this.focusOvershoot = cfg.focusOvershoot;
-        this.rowsBelowDock = cfg.rowsBelowDock;
-        this.dockTitle = cfg.dockTitle;
-        this.dockRow = cfg.dockRow;
-        this.singleRow = cfg.singleRow;
-        this.restNameAlpha = cfg.alwaysShowNames ? 0.75f : 0f;
+        this.rowsBelowDock = catalogueMode ? 0 : cfg.rowsBelowDock;
+        this.dockTitle = !catalogueMode && cfg.dockTitle;
+        this.dockRow = !catalogueMode && cfg.dockRow;
+        this.singleRow = !catalogueMode && cfg.singleRow;
+        this.restNameAlpha = catalogueMode || cfg.alwaysShowNames ? 0.75f : 0f;
         this.cinematic = cfg.cinematicHome;
         this.launchActions = cfg.launchActions;
         this.iconTiles = new HashSet<>(Arrays.asList(ctx.getResources().getStringArray(R.array.icon_tiles)));
@@ -478,7 +485,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         // The dock has no labels, unless always_show_names asks for them (DockDecoration then makes room in the band).
         // In a single row every tile is the dock's kind: the big title above names it.
         boolean dockKind = DockSlots.inDockRow(dockRow, singleRow, position, dockSize);
-        h.name.setVisibility(dockKind && restNameAlpha == 0f ? View.INVISIBLE : View.VISIBLE);
+        h.name.setVisibility(catalogueMode || (dockKind && restNameAlpha == 0f)
+                ? View.INVISIBLE : View.VISIBLE);
         h.inDock = dockKind;
         boolean focused = h.card.isFocused();   // a rebind after reload() can hit the focused tile
         h.name.setAlpha(focused ? 1f : restNameAlpha);

@@ -24,6 +24,8 @@ final class MediaItem {
     final String mime;      // e.g. "video/x-matroska"
     final String player;    // package to play with (mpv for downloads, Just Player for streams); empty = ask
     final String matchKey;  // normalized title+year for dedup across sources
+    String certification = ""; // US content rating once TMDB metadata has loaded
+    int trendingRank;          // 1-based TMDB weekly position; 0 when this item was not trending-matched
 
     final boolean isSeries;                 // true when this card is a show (episode picker), not a single movie
     final int newEpisodeCount;              // for a series, the "N new episodes" count; 0 for movies
@@ -51,6 +53,13 @@ final class MediaItem {
         this.isSeries = isSeries;
         this.newEpisodeCount = newEpisodeCount;
         this.episodes = episodes == null ? Collections.emptyList() : episodes;
+    }
+
+    String spotlightTitle() {
+        if (isSeries && !episodes.isEmpty() && !episodes.get(0).label.isEmpty()) {
+            return episodes.get(0).label;
+        }
+        return title;
     }
 
     /**

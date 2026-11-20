@@ -180,6 +180,12 @@
             android:excludeFromRecents="true"
             android:screenOrientation="landscape"
             android:theme="@style/Theme.TvHome" />
+        <activity
+            android:name=".AppsCatalogActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.TvHome" />
         <!-- Home button for remotes that send KEYCODE_ALL_APPS (Xiaomi). Opt-in: HOME_KEY_SERVICE=1
              build-and-install.sh; see HomeKeyService. -->
         <service

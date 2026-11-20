@@ -6,24 +6,25 @@ tracking and unused system services are disabled (never uninstalled). This is a 
 nothing here is meant for upstream. The original project's README is kept for reference at
 [`README.upstream.md`](README.upstream.md).
 
-![The MyTV home screen: the clock with the weather, Beast and Settings buttons, the Movies & Shows rail and the dock](docs/screenshots/home.jpg)
+![The MyTV home screen](docs/screenshots/home.jpg)
 
 ## What I added on top of upstream
 
-- **Movies & Shows rail** above the dock: a showcase with the selected title, a strip of the next posters, and a
-  Home / Explore tab row. It merges my Beast (Mediarium) download library, played in mpv, with the IPTV
-  provider's newest movies, played in Just Player. Downloads win over streams when both carry the same title.
-- **Explore page** (the Explore tab on Home): a full-screen cinematic browser with a huge TMDB backdrop and the
-  focused title's logo, star rating, age rating, year and overview. A Movies / Shows tab row on top; one poster rail below.
-- **Auto-rotating spotlight** that cross-fades every 10 seconds when idle, on the home screen and in Explore,
-  even while a tab or the spotlight is focused. Any key press restarts the 10 seconds.
-- **Beast button** in the top bar that opens the Mediarium panel full-screen.
-- **House pill** left of Beast that opens my Home Assistant dashboard full-screen, in the same pointer-driven page
-  Beast uses. Each is a config switch (`ha_page`, `beast_page`) that a room's `config.xml` can turn off.
-- **Motion warning**: while Home is showing, the house pill turns solid red and reads **Motion!** when a camera
-  sensor (front door motion, garage motion, doorbell ding) is on. Pressing it opens the dashboard, where the camera
-  card goes live, and clears the warning on every other TV too. It listens over one live connection to Home
-  Assistant that exists only while Home is in front, and it needs a token in a git-ignored file.
+- **Cinematic Dashboard**: a full-screen TMDB backdrop with title, overview, year, runtime, US age rating and a
+  yellow `TMDb` score badge. The Recently Added movie rail sits below the showcase.
+- **Shows**: a separate rail and show-detail screen with the show's artwork, overview, seasons and episode cards.
+  Selecting Shows focuses its first card and pauses the movie spotlight.
+- **Auto-rotating movie spotlight**: it cross-fades every 10 seconds while Movies is idle. Entering Movies clears
+  focus so rotation runs; the next navigation key focuses the first movie. A focused movie also clears after 10
+  seconds of no D-pad activity.
+- **Drawer navigation**: Back or the rail's left edge opens Dashboard, TV, Movies, Shows, Apps, Beast, Home
+  Assist and Settings. The drawer highlights the current section and physical Home always returns to Dashboard.
+- **Apps page**: a standalone catalogue using the launcher's original TV banner tiles, app order, focus scale and
+  animation. It keeps the same left drawer and never changes the launcher app order.
+- **Beast and Home Assist**: both open from the drawer through the existing guarded WebView. The old Beast,
+  Home Assistant and Settings top pills are hidden.
+- **Series freshness**: a show moves up using its newest downloaded episode file's modification time, rather
+  than the older date at which the series was first added.
 - **Weather widget** in place of the date next to the clock: current temperature, a condition icon and today's
   high and low, from the TV's own location.
 - **Per-room setups** under [`mytv/`](mytv/README.md): one config, debloat list and set of scripts per TV.
@@ -31,7 +32,7 @@ nothing here is meant for upstream. The original project's README is kept for re
 ## What is Mediarium (Beast)?
 
 "Beast" is my nickname for **[Mediarium](https://mediarium.app/)**, the self-hosted media server running on my
-home network. It is the source behind both the Movies & Shows rail and the Beast button, and nothing in it
+home network. It is the source behind the Dashboard rails and the Beast drawer destination, and nothing in it
 leaves the LAN.
 
 ![Mediarium Dashboard: server CPU, memory and storage, and download status](docs/screenshots/beast-dashboard.jpg)
@@ -41,7 +42,7 @@ What it does:
 - **Keeps a download library.** Mediarium manages a library of downloaded movies and shows and serves the files
   over my home network. The launcher reads that library for the "Local" titles in the rail and plays them in mpv.
 - **Has its own web panel.** Mediarium runs a web dashboard (search, add, and manage downloads) on a port on the
-  server. The launcher's **Beast button** opens that real panel full-screen in a locked-down WebView, so I can
+  server. The launcher's **Beast drawer item** opens that real panel full-screen in a locked-down WebView, so I can
   drive it from the couch with the remote. The WebView only ever loads that one address; links to anywhere else
   are refused, so it can't wander onto the open internet.
 - **Feeds the rail alongside IPTV.** The Movies & Shows rail merges Mediarium's downloads with the newest movies
@@ -53,9 +54,9 @@ How the pieces fit:
 | Piece | Role |
 |-------|------|
 | Mediarium server ("Beast") | Self-hosted on the LAN: the download library, the file server, and the web panel |
-| Beast button | Opens the Mediarium web panel full-screen in a guarded WebView |
-| Movies & Shows rail | Mediarium downloads (mpv) + IPTV newest movies (Just Player), deduped, art from TMDB |
-| Explore page | A full-screen browser over the same two sources |
+| Beast drawer item | Opens the Mediarium web panel full-screen in a guarded WebView |
+| Dashboard rails | Mediarium downloads (mpv) + IPTV newest movies (Just Player), deduped, art from TMDB |
+| Apps page | Original CleanYourTV banner tiles in a standalone catalogue |
 
 A tour of the panel:
 
@@ -82,18 +83,20 @@ The server addresses, the IPTV login and the TMDB key are **not** in this repo: 
 [`mytv/README.md`](mytv/README.md#secrets-files-git-ignored-recreate-on-a-new-pc) for the exact files and the
 [Beast page notes](mytv/README.md#beast-page-all-rooms) for how the panel behaves on the remote.
 
-### The Explore page
+### Dashboard, Shows and the Apps page
 
 ![Explore, Movies tab: a full-screen backdrop with the title logo, rating and overview over a poster rail](docs/screenshots/explore.jpg)
 
-The Explore tab opens a full-screen browser built to feel like Apple TV's:
+The side drawer replaces the old Home / Explore tabs:
 
-- **Movies** are TMDB's trending-this-week that my IPTV provider or download library actually carries, topped up
-  with my newest Local and IPTV movies so the rail is never thin.
-- **Shows** are my downloaded series. Focusing a show opens its episodes in order as wide stills, each with its
-  own TMDB name and overview. OK plays; Back returns to the show list.
-- The huge backdrop and the title's logo, star rating, age rating, year and overview follow whatever is focused, and the rail
-  auto-rotates when left idle.
+- **Dashboard / Movies** uses the newest Local and IPTV movies. It enters unfocused so the large backdrop rotates
+  every 10 seconds; the first navigation key focuses the first card. A movie focus clears after 10 seconds idle.
+- **Shows** uses downloaded series and focuses the first card after the rail switch. It pauses the movie rotation.
+  OK opens the show's season/episode page; Back returns to the previous screen.
+- **Apps** opens a separate catalogue rendered with the original launcher `AppAdapter` tiles and banner artwork.
+  Its ordering is the launcher's configured ordering, not a new app sort.
+- The full-screen backdrop, episode title, show title, year, runtime, age rating, `TMDb` score and overview follow
+  the focused item.
 - **Age ratings** come from TMDB's US listing and appear next to the year, both here and on the Home showcase.
   Movies show their certificate (PG-13, R and so on) and series show their TV rating (TV-14, TV-MA and so on). A title with no US release on TMDB shows no age rating, so an unreleased film stays
   blank until TMDB lists one.
@@ -108,9 +111,9 @@ Focusing a show opens its episodes in order as wide stills, each with its own TM
 
 | Room | Device | Features |
 |------|--------|------|
-| Office | Hisense SmartTV 4K (lushan), Google TV 12 | Movies & Shows rail, Explore page, Beast button, Weather widget |
-| LivingRoom TV | onn. Streaming Device 4K pro (SNA), Google TV 14 | Movies & Shows rail, Explore page, Beast button, Weather widget |
-| Master Bedroom | onn 4K Pro (jarvis2), Google TV 14 | Movies & Shows rail, Explore page, Beast button, Weather widget |
+| Office | Hisense SmartTV 4K (lushan), Google TV 12 | Dashboard, Shows detail, Apps catalogue, drawer, Weather widget |
+| LivingRoom TV | onn. Streaming Device 4K pro (SNA), Google TV 14 | Same launcher features, Weather widget |
+| Master Bedroom | onn 4K Pro (jarvis2), Google TV 14 | Same launcher features, Weather widget |
 
 Addresses, what was disabled and why, remote-button notes and the restore commands are in
 [`mytv/README.md`](mytv/README.md). Each room's folder has its own `config.xml`, `debloat.txt` and the batches
@@ -139,8 +142,8 @@ the launcher's on every build, so the launcher's copy always shows the last room
 2. Back it up first with `backup.ps1`. Check `dumpsys wifi | grep -o 'cname=[^ ]*'` before disabling the setup
    wizard: if it owns the saved Wi-Fi network, disabling it drops the TV off Wi-Fi.
 3. Copy the office `config.xml` into the new room's folder and change what the hardware needs (a streaming box
-   has no Live TV app or HDMI inputs). Keep the top bar to Beast and Settings: `show_network_pill` and
-   `show_inputs_pill` stay `false` in every room. Keep `weather_widget` and `explore_page` on.
+   has no Live TV app or HDMI inputs). The main navigation is now in the side drawer, so the old Home Assist,
+   Beast and Settings top pills stay hidden. Keep `weather_widget`, `explore_page` and `media_rail` on.
 4. Disable the debloat batches one at a time with a screenshot between them, setup wizard last.
 5. Install mpv and Just Player if the room uses the rail, then run `build-and-install.ps1`.
 6. Push the theme, reboot once, and compare `pm list packages -d` before and after.

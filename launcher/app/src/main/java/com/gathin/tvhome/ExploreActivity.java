@@ -15,6 +15,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.text.Spannable;
+import android.text.SpannableStringBuilder;
 import android.util.Log;
 import android.util.LruCache;
 import android.util.TypedValue;
@@ -34,8 +36,10 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
@@ -53,6 +57,7 @@ import java.util.regex.Pattern;
  * with the newest Local/IPTV movies. Shows = every downloaded series. Built in code, light for 1 GB TVs.
  */
 public class ExploreActivity extends Activity {
+    static final String EXTRA_SHOW_ID = "show_id";
     private static final String TAG = "ExploreActivity";
     private static final int TRENDING_SCAN = 40;
     private static final int MOVIES_TARGET = 30;
@@ -73,6 +78,7 @@ public class ExploreActivity extends Activity {
     private String downloadPlayer, streamPlayer, badgeDownload, badgeStream;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ExecutorService metadataPool = Executors.newFixedThreadPool(2);
     private final ExecutorService imagePool = Executors.newFixedThreadPool(2);
     private final Handler main = new Handler(Looper.getMainLooper());
     // Bigger now that backdrops/stills come at original size: a 1920x1080 ARGB_8888 banner is ~8 MB, and the
@@ -86,6 +92,7 @@ public class ExploreActivity extends Activity {
     private ImageView backdrop;
     private ImageView logo;
     private TextView bannerTitle, bannerMeta, bannerOverview;
+    private TextView seasonPill;
     private MediaItem featured;
     private String backdropKey = "";
 
@@ -99,12 +106,14 @@ public class ExploreActivity extends Activity {
     private Rail episodeRail;       // a focused show's episodes; null-content when not in episode mode
     private boolean episodeMode;
     private MediaItem episodeShow;  // the series whose episodes are shown
+    private String requestedShowId;
 
     private List<MediaItem> movieItems = new ArrayList<>();
     private List<MediaItem> showItems = new ArrayList<>();
 
     // TMDB banner-detail cache by "mv|key" / "tv|key"; episode-text cache by show id -> (season,episode)->info.
     private final Map<String, TmdbClient.Info> infoCache = new HashMap<>();
+    private final Set<String> infoLoading = new HashSet<>();
     private final Map<String, Map<String, TmdbClient.EpisodeInfo>> seasonCache = new HashMap<>();
 
     private boolean resumed;
@@ -122,6 +131,7 @@ public class ExploreActivity extends Activity {
         super.onCreate(state);
         Resources res = getResources();
         density = res.getDisplayMetrics().density;
+        requestedShowId = getIntent().getStringExtra(EXTRA_SHOW_ID);
         downloadPlayer = res.getString(R.string.media_rail_download_player).trim();
         streamPlayer = res.getString(R.string.media_rail_stream_player).trim();
         badgeDownload = res.getString(R.string.media_rail_badge_download);
@@ -141,7 +151,7 @@ public class ExploreActivity extends Activity {
         if (!tKey.isEmpty()) tmdb = new TmdbClient(tKey);
 
         setContentView(buildUi());
-        tabRow.post(() -> tabRow.requestFocus());   // default focus: the Movies tab (the selected tab)
+        tabRow.setVisibility(View.GONE);
         loadMovies();
         loadShows();
     }
@@ -178,6 +188,7 @@ public class ExploreActivity extends Activity {
 
         root.addView(buildBanner(), topLp(dp(BANNER_H)));
         root.addView(buildTabRow(), topLp(ViewGroup.LayoutParams.WRAP_CONTENT));
+        tabRow.setVisibility(View.GONE);
 
         railStack = new FrameLayout(this);
         railStack.setClipChildren(false);
@@ -322,6 +333,22 @@ public class ExploreActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         ovLp.topMargin = dp(12);
         banner.addView(bannerOverview, ovLp);
+
+        seasonPill = new TextView(this);
+        seasonPill.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        seasonPill.setTextColor(Color.WHITE);
+        seasonPill.setTypeface(UiFont.get(this, R.string.font_medium));
+        seasonPill.setPadding(dp(16), dp(8), dp(16), dp(8));
+        seasonPill.setVisibility(View.GONE);
+        GradientDrawable seasonBg = new GradientDrawable();
+        seasonBg.setCornerRadius(dp(18));
+        seasonBg.setColor(0xCC11141A);
+        seasonBg.setStroke(dp(1), 0x66FFFFFF);
+        seasonPill.setBackground(seasonBg);
+        LinearLayout.LayoutParams seasonLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        seasonLp.topMargin = dp(14);
+        banner.addView(seasonPill, seasonLp);
         return banner;
     }
 
@@ -338,7 +365,7 @@ public class ExploreActivity extends Activity {
                     titleRail.setItems(result, getString(R.string.explore_movies_empty));
                     if (titleRail.hasItems() && featured == null) {
                         showFeatured(titleRail.itemAt(0));
-                        main.post(() -> { paintTabs(); tabRow.requestFocus(); });
+                        main.post(this::focusTitleRail);
                     }
                 }
             });
@@ -365,10 +392,13 @@ public class ExploreActivity extends Activity {
         for (MediaItem m : localMovies) byKey.put(m.matchKey, m);
         try {
             if (tmdb != null) {
+                int rank = 0;
                 for (TmdbMovie t : tmdb.trendingWeek(TRENDING_SCAN)) {
+                    rank++;
                     MediaItem have = byKey.get(MediaItem.key(t.title, t.year));
                     if (have == null) have = byKey.get(MediaItem.key(t.title, 0));
                     if (have == null || !seen.add(have.matchKey)) continue;
+                    have.trendingRank = rank;
                     if (have.backdrop.isEmpty()) {
                         String bd = TmdbClient.backdropUrl(t.backdropPath);
                         if (bd != null) have.backdrop = bd;
@@ -403,9 +433,26 @@ public class ExploreActivity extends Activity {
             main.post(() -> {
                 if (isFinishing()) return;
                 showItems = items;
-                if (tab == Tab.SHOWS) {
+                if (tab == Tab.SHOWS || requestedShowId != null) {
                     titleRail.setItems(items, getString(R.string.explore_shows_empty));
-                    if (titleRail.hasItems() && featured == null) showFeatured(titleRail.itemAt(0));
+                    MediaItem requested = null;
+                    if (requestedShowId != null) {
+                        for (MediaItem item : items) {
+                            if (requestedShowId.equals(item.id)) {
+                                requested = item;
+                                break;
+                            }
+                        }
+                    }
+                    if (requested != null) {
+                        tab = Tab.SHOWS;
+                        paintTabs();
+                        showFeatured(requested);
+                        enterEpisodeMode(requested);
+                        requestedShowId = null;
+                    } else if (titleRail.hasItems() && featured == null) {
+                        showFeatured(titleRail.itemAt(0));
+                    }
                 }
             });
         });
@@ -422,7 +469,8 @@ public class ExploreActivity extends Activity {
         String year = it.year > 0 ? String.valueOf(it.year) : "";
         String badge = it.source == MediaItem.Source.DOWNLOAD ? badgeDownload : badgeStream;
         bannerMeta.setText(join(it.isSeries ? getString(R.string.explore_type_show)
-                : getString(R.string.explore_type_movie), year, badge));
+                : getString(R.string.explore_type_movie), year,
+                it.trendingRank > 0 ? "\u25A1  #" + it.trendingRank + " in Trending" : "", badge));
         bannerOverview.setText("");
         setBackdrop(it.backdrop.isEmpty() ? it.poster : it.backdrop);
         fetchInfo(it);
@@ -436,7 +484,8 @@ public class ExploreActivity extends Activity {
             applyInfo(it, cached);
             return;
         }
-        worker.execute(() -> {
+        if (!infoLoading.add(key)) return;
+        metadataPool.execute(() -> {
             TmdbClient.Info info = null;
             try {
                 info = tmdb.lookup(it.title, it.year, it.isSeries, 0);
@@ -445,8 +494,28 @@ public class ExploreActivity extends Activity {
             }
             final TmdbClient.Info result = info;
             main.post(() -> {
-                if (result != null) infoCache.put(key, result);
+                infoLoading.remove(key);
+                if (result != null) {
+                    infoCache.put(key, result);
+                    for (MediaItem item : movieItems) {
+                        if (key.equals((item.isSeries ? "tv|" : "mv|") + item.matchKey)) {
+                            item.certification = result.certification;
+                        }
+                    }
+                    for (MediaItem item : showItems) {
+                        if (key.equals((item.isSeries ? "tv|" : "mv|") + item.matchKey)) {
+                            item.certification = result.certification;
+                        }
+                    }
+                    titleRail.adapter.notifyDataSetChanged();
+                }
                 if (result != null && featured == it && !episodeMode) applyInfo(it, result);
+                if (result != null && episodeMode && episodeShow != null
+                        && episodeShow.matchKey.equals(it.matchKey)
+                        && bannerPos >= 0 && bannerPos < episodeShow.episodes.size()) {
+                    BeastClient.Episode episode = episodeShow.episodes.get(bannerPos);
+                    showEpisode(episodeShow, episode, episodeInfoFor(episodeShow, episode));
+                }
             });
         });
     }
@@ -456,10 +525,12 @@ public class ExploreActivity extends Activity {
         if (!info.overview.isEmpty()) bannerOverview.setText(info.overview);
         int y = it.year > 0 ? it.year : info.year;
         String year = y > 0 ? String.valueOf(y) : "";
-        String rating = info.rating > 0 ? String.format(java.util.Locale.US, "\u2605 %.1f", info.rating) : "";
+        String runtime = TmdbClient.runtimeText(info.runtime);
         String badge = it.source == MediaItem.Source.DOWNLOAD ? badgeDownload : badgeStream;
-        bannerMeta.setText(join(it.isSeries ? getString(R.string.explore_type_show)
-                : getString(R.string.explore_type_movie), year, info.certification, rating, badge));
+        String base = join(it.isSeries ? getString(R.string.explore_type_show)
+                : getString(R.string.explore_type_movie), year, runtime,
+                it.trendingRank > 0 ? "\u25A1  #" + it.trendingRank + " in Trending" : "", badge);
+        bannerMeta.setText(withTmdbScore(base, info.rating));
         if (!info.logo.isEmpty()) {
             loadInto(logo, info.logo, () -> {
                 if (featured == it && !episodeMode) {
@@ -482,7 +553,9 @@ public class ExploreActivity extends Activity {
         bannerTitle.setText(epName);
         bannerTitle.setVisibility(logo.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
         String seLabel = se != null ? String.format(java.util.Locale.US, "S%02dE%02d", se[0], se[1]) : "";
-        bannerMeta.setText(join(show.title, seLabel));
+        TmdbClient.Info showInfo = infoCache.get("tv|" + show.matchKey);
+        bannerMeta.setText(withTmdbScore(join(show.title, seLabel),
+                showInfo == null ? 0 : showInfo.rating));
         bannerOverview.setText(info != null && !info.overview.isEmpty()
                 ? info.overview : getString(R.string.explore_no_episode_overview));
         // With a still, show it; without one, fall back to the show's wide TMDB backdrop (original size) rather than
@@ -567,8 +640,15 @@ public class ExploreActivity extends Activity {
     private void enterEpisodeMode(MediaItem show) {
         if (show == null || !show.isSeries || show.episodes == null || show.episodes.isEmpty()) return;
         episodeMode = true;
+        tabRow.setVisibility(View.GONE);
         bannerPos = 0;
         episodeShow = orderedEpisodes(show);
+        int latestSeason = latestSeason(episodeShow);
+        if (latestSeason > 0) {
+            seasonPill.setText("Season " + latestSeason);
+            seasonPill.setVisibility(View.VISIBLE);
+            episodeShow = episodesInSeason(episodeShow, latestSeason);
+        }
         episodeRail.setEpisodes(episodeShow);
         titleRail.view.animate().alpha(0f).setDuration(140).withEndAction(() ->
                 titleRail.view.setVisibility(View.GONE)).start();
@@ -603,9 +683,53 @@ public class ExploreActivity extends Activity {
                 show.url, show.mime, show.player, true, show.newEpisodeCount, sorted);
     }
 
+    private static int latestSeason(MediaItem show) {
+        int latest = 0;
+        for (BeastClient.Episode episode : show.episodes) {
+            int[] se = seasonEpisodeStatic(episode.label);
+            if (se != null) latest = Math.max(latest, se[0]);
+        }
+        return latest;
+    }
+
+    private static MediaItem episodesInSeason(MediaItem show, int season) {
+        List<BeastClient.Episode> episodes = new ArrayList<>();
+        for (BeastClient.Episode episode : show.episodes) {
+            int[] se = seasonEpisodeStatic(episode.label);
+            if (se != null && se[0] == season) episodes.add(episode);
+        }
+        return new MediaItem(show.source, show.id, show.title, show.year, show.caption, show.poster, show.added,
+                show.url, show.mime, show.player, true, episodes.size(), episodes);
+    }
+
+    private static int[] seasonEpisodeStatic(String label) {
+        if (label == null) return null;
+        Matcher m = SXXEYY.matcher(label);
+        if (!m.find()) return null;
+        try {
+            return new int[] {Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2))};
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private CharSequence withTmdbScore(String base, double score) {
+        SpannableStringBuilder text = new SpannableStringBuilder(base == null ? "" : base);
+        if (score <= 0) return text;
+        if (text.length() > 0) text.append("  ");
+        int start = text.length();
+        text.append("TMDb");
+        text.setSpan(new RoundedBadgeSpan(this, true), start, text.length(),
+                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        text.append(" ").append(String.format(java.util.Locale.US, "%.1f", score));
+        return text;
+    }
+
     private void leaveEpisodeMode(boolean refocusTitle) {
         if (!episodeMode) return;
         episodeMode = false;
+        tabRow.setVisibility(View.GONE);
+        seasonPill.setVisibility(View.GONE);
         episodeShow = null;
         bannerPos = 0;
         episodeRail.view.animate().alpha(0f).setDuration(140).withEndAction(() -> {
@@ -801,6 +925,7 @@ public class ExploreActivity extends Activity {
             h.name.setVisibility(series || it.poster == null || it.poster.isEmpty()
                     ? View.VISIBLE : View.INVISIBLE);
             h.badge.setText(it.source == MediaItem.Source.DOWNLOAD ? badgeDownload : badgeStream);
+            fetchInfo(it);
             h.sub.setVisibility(series ? View.VISIBLE : View.GONE);
             h.accent.setVisibility(series ? View.VISIBLE : View.GONE);
             if (series) h.sub.setText(newEpisodesText(it.newEpisodeCount));
@@ -833,7 +958,7 @@ public class ExploreActivity extends Activity {
 
     private final class CardHolder extends RecyclerView.ViewHolder {
         final ImageView image;
-        TextView name, badge, sub;
+        TextView name, badge, sub, rating;
         View accent;
 
         CardHolder(View card) {
@@ -841,6 +966,7 @@ public class ExploreActivity extends Activity {
             image = card.findViewWithTag("image");
             name = card.findViewWithTag("name");
             badge = card.findViewWithTag("badge");
+            rating = card.findViewWithTag("rating");
             sub = card.findViewWithTag("sub");
             accent = card.findViewWithTag("accent");
             card.setOnFocusChangeListener((v, focused) -> {
@@ -876,7 +1002,7 @@ public class ExploreActivity extends Activity {
                 if (episodeMode) {
                     leaveEpisodeMode(true);
                 } else {
-                    tabRow.requestFocus();
+                    focusTitleRail();
                 }
                 return true;
             case KeyEvent.KEYCODE_DPAD_DOWN:
@@ -1038,6 +1164,7 @@ public class ExploreActivity extends Activity {
         super.onDestroy();
         main.removeCallbacks(beat);
         worker.shutdownNow();
+        metadataPool.shutdownNow();
         imagePool.shutdownNow();
         images.evictAll();
     }
@@ -1131,6 +1258,31 @@ public class ExploreActivity extends Activity {
         blp.setMargins(dp(4), dp(4), 0, 0);
         card.addView(badge, blp);
         return card;
+    }
+
+    private TextView ratingBadge() {
+        TextView rating = new TextView(this);
+        rating.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9);
+        rating.setTextColor(Color.WHITE);
+        rating.setTypeface(UiFont.get(this, R.string.font_medium));
+        rating.setGravity(Gravity.CENTER);
+        rating.setIncludeFontPadding(false);
+        rating.setSingleLine(true);
+        rating.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(4));
+        bg.setColor(0xCC000000);
+        bg.setStroke(dp(1), 0xCCFFFFFF);
+        rating.setBackground(bg);
+        rating.setVisibility(View.GONE);
+        return rating;
+    }
+
+    private static void bindRating(TextView view, MediaItem item, TmdbClient.Info info) {
+        String rating = info == null ? item.certification : info.certification;
+        rating = TmdbClient.ratingChip(rating);
+        view.setText(rating);
+        view.setVisibility(rating.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     /** A wide episode card: a 16:9 still with an "SxxEyy · name" caption below it. */

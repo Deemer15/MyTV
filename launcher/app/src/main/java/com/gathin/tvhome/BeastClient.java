@@ -71,7 +71,7 @@ final class BeastClient {
                 Episode newest = eps.get(0);
                 caption = d.title + (newest.label.isEmpty() ? "" : " · " + sxxEyy(newest.label));
                 out.add(new MediaItem(MediaItem.Source.DOWNLOAD, "dl:" + d.kind + ":" + d.id, d.title, year,
-                        caption, d.posterUrl, d.at, newest.url, newest.mime, player,
+                        caption, d.posterUrl, latestSeriesAdded(d.at, eps), newest.url, newest.mime, player,
                         true, eps.size(), eps));
                 continue;
             } else {
@@ -264,6 +264,7 @@ final class BeastClient {
         String serverPath;   // absolute path under libraryRoot
         String label;        // picker label, e.g. "S39E06 · A Fine Line..." (or "SxxEyy", or "")
         long episodeId;      // the server's episodeId; larger is newer
+        long modified;       // file modification time in epoch seconds, when the server supplies it
         String url;          // media-base URL the player opens; null until mapped
         String mime;         // e.g. "video/x-matroska"
     }
@@ -289,7 +290,7 @@ final class BeastClient {
                     while (r.hasNext()) {
                         String path = "", kind = "";
                         boolean main = false;
-                        long ep = Long.MIN_VALUE;
+                        long ep = Long.MIN_VALUE, modified = 0;
                         r.beginObject();
                         while (r.hasNext()) {
                             switch (r.nextName()) {
@@ -297,6 +298,7 @@ final class BeastClient {
                                 case "kind": kind = string(r); break;
                                 case "main": main = bool(r); break;
                                 case "episodeId": ep = parseLong(string(r)); break;
+                                case "modified": modified = epochSeconds(string(r)); break;
                                 default: r.skipValue();
                             }
                         }
@@ -307,6 +309,7 @@ final class BeastClient {
                             e.serverPath = libraryRoot + "/" + rel;
                             e.label = EpisodeLabels.format(path);
                             e.episodeId = ep;
+                            e.modified = modified;
                             e.mime = mimeFor(path);
                             eps.add(e);
                         }
@@ -326,6 +329,14 @@ final class BeastClient {
             if (e.url != null) out.add(e);
         }
         return out;
+    }
+
+    static long latestSeriesAdded(long dashboardAdded, List<Episode> episodes) {
+        long latest = dashboardAdded;
+        for (Episode episode : episodes) {
+            if (episode.modified > latest) latest = episode.modified;
+        }
+        return latest;
     }
 
     /** The SxxEyy prefix of a picker label (everything before the " · "), for the rail header caption. */

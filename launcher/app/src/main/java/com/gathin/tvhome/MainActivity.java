@@ -149,6 +149,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private AppAdapter adapter;
     private RecyclerView grid;
     private FrameLayout root;
+    private FrameLayout sideNav;
+    private LinearLayout sideNavPanel;
+    private final List<TextView> sideNavItems = new ArrayList<>();
+    private int sideNavIndex;
+    private int activeNavIndex;
+    private String pendingNavTarget;
+    private View sideNavReturnFocus;
     private WallpaperPlayer wallpaperPlayer;
     private GlassView glass;
     /** "Latest movies" above the dock (res/values/iptv_rail.xml); null when off. */
@@ -183,13 +190,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private String heroArtKey;
 
     // ---- Movies & Shows backdrop (behind everything, driven by MediaRail focus) ----
-    /** Full-screen softened art for the focused carousel item; its scrim keeps the UI readable over it. */
+    /** Full-screen art for the focused carousel item; its scrim keeps the UI readable over it. */
     private ImageView mediaBackdrop;
     private View mediaBackdropScrim;
     /** Opacity of the media backdrop art when shown; the scrim carries the darkening for legibility. */
-    private static final float MEDIA_BACKDROP_ALPHA = 0.55f;
-    /** Softened backdrop per item art URL (HeroArt.fromBitmap, about 5 KB each), capped so Home stays small. */
-    private final LruCache<String, Bitmap> mediaBackdropCache = new LruCache<>(16);
+    private static final float MEDIA_BACKDROP_ALPHA = 1f;
+    /** Crisp media backdrops, capped to keep the 1 GB TV within its memory budget. */
+    private final LruCache<String, Bitmap> mediaBackdropCache = new LruCache<>(6);
     /** The art URL the media backdrop currently shows, so re-focusing the same item only fades it back in. */
     private String mediaBackdropKey;
     /** Serialises backdrop fetch/blur off the main thread; created lazily, shut down in onDestroy. */
@@ -1111,8 +1118,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnLibraryTop.setVisibility(cfg.libraryButton && cfg.appLibrary ? View.VISIBLE : View.GONE);
         // House pill: the Home Assistant dashboard, full screen, on the same page as Beast (config ha_page, ha_url).
         btnHomePill = (TextView) findViewById(R.id.btnHome);
+        btnHomePill.setVisibility(View.GONE);
         if (getResources().getBoolean(R.bool.ha_page) && !getString(R.string.ha_url).trim().isEmpty()) {
-            btnHomePill.setVisibility(View.VISIBLE);
             // Motion warning (config ha_alert, token in ha_secrets.xml): the pill turns red while a camera sensor is on.
             haAlert = HaAlert.create(this, handler, this::showHaAlert);
             btnHomePill.setOnClickListener(v -> {
@@ -1123,8 +1130,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         // Beast: the Mediarium panel on the media server, full screen (config beast_page, beast_url).
         View btnBeast = findViewById(R.id.btnBeast);
+        btnBeast.setVisibility(View.GONE);
         if (getResources().getBoolean(R.bool.beast_page) && !getString(R.string.beast_url).trim().isEmpty()) {
-            btnBeast.setVisibility(View.VISIBLE);
             btnBeast.setOnClickListener(v -> startActivity(new Intent(this, BeastActivity.class)));
         }
         addTopBarApps(cfg.topBarApps, cfg.launchActions);
@@ -1157,6 +1164,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             topButtons.setLayoutParams(tlp);
             topButtons.setGravity(Gravity.CENTER_VERTICAL);
         }
+        btnSettings.setVisibility(View.GONE);
         if (iconOnlyButtons) {
             if (cfg.wifiLabelWidth > 0) btnWifi.setMaxWidth(Math.round(cfg.wifiLabelWidth * density));
             else makeIconOnly(btnWifi);
@@ -1206,6 +1214,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnSettings.setOnKeyListener(pillKeys);
         btnReorder.setOnKeyListener(pillKeys);
         btnLibraryTop.setOnKeyListener(pillKeys);
+        if (btnHomePill != null) btnHomePill.setOnKeyListener(pillKeys);
         findViewById(R.id.btnBeast).setOnKeyListener(pillKeys);
         for (View button : topAppButtons) button.setOnKeyListener(pillKeys);
         if (advancedEffects) {
@@ -1230,21 +1239,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (dockRow && !singleRow) {
             mediaRail = MediaRail.create(this, root, glass, new MediaRail.Host() {
                 @Override public void onRailUp() {
-                    hideMediaBackdrop();
+                    grid.setAlpha(0f);
+                    grid.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
                     (btnInputs.getVisibility() == View.VISIBLE ? btnInputs : firstTopButton()).requestFocus();
                 }
 
-                @Override public void onRailDown() {
-                    hideMediaBackdrop();
-                    focusTile(lastFocused % COLUMNS);
-                }
+                @Override public void onRailDown() { }
 
                 @Override public void onRailFocused() {
+                    grid.setAlpha(0f);
+                    grid.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+                    grid.stopScroll();
                     hideHero();   // the hero shelf is GONE on this layout (set above); harmless backstop
                 }
 
                 @Override public void onItemFocused(MediaItem item) {
                     showMediaBackdrop(item);
+                }
+
+                @Override public void onRailMenu() {
+                    openSideNav();
                 }
             });
             if (mediaRail != null) {
@@ -1258,6 +1272,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                         mediaRail.setGridAtTop(rv.computeVerticalScrollOffset() <= (int) (8 * density));
                     }
                 });
+                grid.requestLayout();
+                grid.post(() -> mediaRail.placeBelowHeader(headerBottomInRoot()));
+                grid.post(() -> {
+                    if (mediaRail.isShowing()) grid.setAlpha(0f);
+                });
+                root.post(() -> mediaRail.placeBelowHeader(headerBottomInRoot()));
             } else {
                 IptvRail = IptvRail.create(this, root, glass, new IptvRail.Host() {
                     @Override public void onRailUp() {
@@ -1280,6 +1300,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     });
                 }
             }
+
         }
 
         packageFilter.addAction(Intent.ACTION_PACKAGE_ADDED);
@@ -1316,6 +1337,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (savedInstanceState == null && !openLauncherSettingsIfAsked(getIntent()) && !openLibraryIfAsked(getIntent())) {
             openInputsIfAsked(getIntent());
         }
+        buildSideNav();
     }
 
     /**
@@ -1399,10 +1421,30 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        if (intent != null && intent.getBooleanExtra("open_side_nav", false)) {
+            setIntent(new Intent(Intent.ACTION_MAIN));
+            activeNavIndex = intent.getIntExtra("nav_index", activeNavIndex);
+            getWindow().getDecorView().post(this::openSideNav);
+            return;
+        }
+        String target = intent != null && intent.getBooleanExtra("focus_movies", false) ? "movies"
+                : intent != null && intent.getBooleanExtra("focus_shows", false) ? "shows"
+                : intent != null && intent.getBooleanExtra("open_tv", false) ? "tv"
+                : intent != null && intent.getBooleanExtra("open_settings", false) ? "settings"
+                : intent != null && intent.getBooleanExtra("open_beast", false) ? "beast"
+                : intent != null && intent.getBooleanExtra("open_ha", false) ? "ha"
+                : intent != null && intent.getBooleanExtra("open_dashboard", false) ? "dashboard" : null;
+        if (target != null) {
+            pendingNavTarget = target;
+            setIntent(new Intent(Intent.ACTION_MAIN));
+            return;
+        }
         if (openLauncherSettingsIfAsked(intent)) return;
         if (openLibraryIfAsked(intent)) return;
         if (openInputsIfAsked(intent)) return;
         if (intent == null || !intent.hasCategory(Intent.CATEGORY_HOME)) return;
+        activeNavIndex = 0;
+        pendingNavTarget = "dashboard";
         if (gameDay != null && !stopped) gameDay.read();
         grid.scrollToPosition(0);
         lastFocused = 0;
@@ -1411,6 +1453,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // nudge the grid's scroll offset and flip the rail's grid-at-top flag false, hiding the rail on a Home
         // press. So when the rail has content, land focus on it (which also keeps it on screen).
         boolean railTakesFocus = mediaRail != null && mediaRail.hasItems();
+        if (mediaRail != null) {
+            mediaRail.recoverFromApps();
+            mediaRail.focusMovies();
+        }
         if (stopped) {
             // A real resume (with a tile rebuild) is coming: tell it not to let the grid grab focus back off the
             // rail. Only armed here, where onResume follows, so the flag can't go stale on the overlay path below.
@@ -1469,7 +1515,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // fires the grid's OnScrollListener -> setGridAtTop(false) and pulls focus off the showcase, which hid the
         // rail right after it appeared ("flashes then disappears"). Skip the grid's focus restore in that case.
         boolean railOwnsFocus = mediaRail != null
-                && (mediaRail.wantsFocusOnResume() || railFocusAfterHome);
+                && (mediaRail.hasItems() || mediaRail.wantsFocusOnResume() || railFocusAfterHome);
         railFocusAfterHome = false;   // one-shot: consumed by this resume
         switch (tileRefresh.onResume(packagesChangedSinceRebuild())) {
             case REBUILD:
@@ -1488,7 +1534,42 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // If the user left the media rail to play something or browse, put focus back on the showcase so returning
         // lands where they were — and so the rail is guaranteed on screen.
         if (mediaRail != null) mediaRail.restoreFocusIfRequested();
-        if (mediaRail != null) mediaRail.onResumed();   // allow idle auto-rotation now Home is in front again
+        if (mediaRail != null) {
+            mediaRail.onResumed();   // allow idle auto-rotation now Home is in front again
+            root.post(() -> mediaRail.placeBelowHeader(headerBottomInRoot()));
+            if (railOwnsFocus) grid.post(mediaRail::focusMovies);
+        }
+        if (pendingNavTarget != null) {
+            String target = pendingNavTarget;
+            pendingNavTarget = null;
+            root.post(() -> {
+                if ("tv".equals(target)) {
+                    activeNavIndex = 1;
+                    Intent tv = getPackageManager().getLeanbackLaunchIntentForPackage("ar.tvplayer.tv");
+                    if (tv != null) startActivity(tv.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                } else if ("settings".equals(target)) {
+                    activeNavIndex = 7;
+                    if (launcherSettingsButton) startActivityForResult(
+                            new Intent(this, LauncherSettingsActivity.class), LAUNCHER_SETTINGS_REQUEST);
+                    else open(systemIntent(android.provider.Settings.ACTION_SETTINGS));
+                } else if ("beast".equals(target)) {
+                    activeNavIndex = 5;
+                    startActivity(new Intent(this, BeastActivity.class));
+                } else if ("ha".equals(target)) {
+                    activeNavIndex = 6;
+                    startActivity(new Intent(this, BeastActivity.class)
+                            .putExtra(BeastActivity.EXTRA_URL, getString(R.string.ha_url).trim()));
+                } else if ("shows".equals(target) && mediaRail != null) {
+                    activeNavIndex = 3;
+                    mediaRail.recoverFromApps();
+                    mediaRail.focusShows();
+                } else if (mediaRail != null) {
+                    activeNavIndex = "dashboard".equals(target) ? 0 : 2;
+                    mediaRail.recoverFromApps();
+                    mediaRail.focusMovies();
+                }
+            });
+        }
         updateGreeting();
         updatePanel();
         // Back from an app opened from its tile, focus is still on that tile, so the cinematic "Last opened" line kept
@@ -1667,6 +1748,216 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         });
     }
 
+    private void buildSideNav() {
+        sideNav = new FrameLayout(this);
+        sideNav.setVisibility(View.GONE);
+        sideNav.setAlpha(0f);
+        sideNav.setFocusable(false);
+        sideNav.setClickable(true);
+        sideNav.setBackgroundColor(0x88000000);
+
+        sideNavPanel = new LinearLayout(this);
+        sideNavPanel.setOrientation(LinearLayout.VERTICAL);
+        sideNavPanel.setPadding(dp(22), dp(36), dp(22), dp(28));
+        sideNavPanel.setMinimumWidth(dp(250));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadii(new float[]{0, 0, dp(24), dp(24), dp(24), dp(24), 0, 0});
+        bg.setColor(0xF214171D);
+        sideNavPanel.setBackground(bg);
+
+        TextView title = new TextView(this);
+        title.setText("MyTV");
+        title.setTextColor(0xBFFFFFFF);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        title.setTypeface(UiFont.get(this, R.string.font_medium));
+        title.setLetterSpacing(0.14f);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        titleLp.bottomMargin = dp(14);
+        sideNavPanel.addView(title, titleLp);
+
+        addSideNavItem(R.drawable.ic_house, "Dashboard", 0);
+        addSideNavItem(R.drawable.ic_livetv, "TV", 1);
+        addSideNavItem(R.drawable.ic_nav_movies, "Movies", 2);
+        addSideNavItem(R.drawable.ic_nav_shows, "Shows", 3);
+        addSideNavItem(R.drawable.ic_apps_pill, "Apps", 4);
+        addSideNavItem(R.drawable.ic_nav_beast, "Beast", 5);
+        addSideNavItem(R.drawable.ic_wifi, "Home Assist", 6);
+        addSideNavItem(R.drawable.ic_settings, "Settings", 7);
+
+        FrameLayout.LayoutParams panelLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        panelLp.gravity = Gravity.START;
+        sideNav.addView(sideNavPanel, panelLp);
+        root.addView(sideNav, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        paintSideNav();
+    }
+
+    private int dp(float value) {
+        return Math.round(value * density);
+    }
+
+    private void addSideNavItem(int icon, String label, int index) {
+        TextView item = new TextView(this);
+        item.setText(label);
+        item.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0);
+        item.setCompoundDrawablePadding(dp(14));
+        item.setCompoundDrawableTintList(ColorStateList.valueOf(Color.WHITE));
+        item.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        item.setTextColor(Color.WHITE);
+        item.setTypeface(UiFont.get(this, R.string.font_regular));
+        item.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        item.setPadding(dp(14), dp(7), dp(14), dp(7));
+        item.setSingleLine(true);
+        item.setFocusable(true);
+        item.setFocusableInTouchMode(false);
+        item.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+        item.setTag(index);
+        item.setOnFocusChangeListener((v, focused) -> {
+            if (focused) {
+                sideNavIndex = index;
+                paintSideNav();
+            }
+        });
+        item.setOnKeyListener((v, keyCode, event) -> {
+            if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                sideNavIndex = Math.max(0, sideNavIndex - 1);
+                paintSideNav();
+                sideNavItems.get(sideNavIndex).requestFocus();
+                return true;
+            }
+            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                sideNavIndex = Math.min(sideNavItems.size() - 1, sideNavIndex + 1);
+                paintSideNav();
+                sideNavItems.get(sideNavIndex).requestFocus();
+                return true;
+            }
+            if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+                activateSideNav(index);
+                return true;
+            }
+            if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE
+                    || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                closeSideNav(true);
+                return true;
+            }
+            return false;
+        });
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = dp(3);
+        sideNavPanel.addView(item, lp);
+        sideNavItems.add(item);
+    }
+
+    private boolean handleSideNav(KeyEvent event) {
+        if (sideNav == null || openPopup != null || cardPrompt != null || appLibrary != null) return false;
+        if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+        if (sideNav.getVisibility() == View.VISIBLE) return false;
+        if (event.getKeyCode() != KeyEvent.KEYCODE_BACK
+                && event.getKeyCode() != KeyEvent.KEYCODE_ESCAPE) return false;
+        openSideNav();
+        return true;
+    }
+
+    private void openSideNav() {
+        sideNavReturnFocus = getCurrentFocus();
+        sideNavPanel.setTranslationX(-dp(260));
+        sideNav.setVisibility(View.VISIBLE);
+        sideNav.setAlpha(0f);
+        sideNav.animate().alpha(1f).setDuration(180).start();
+        sideNavPanel.animate().translationX(0f).setDuration(220).start();
+        sideNavIndex = activeNavIndex;
+        paintSideNav();
+        sideNavItems.get(sideNavIndex).post(() -> sideNavItems.get(sideNavIndex).requestFocus());
+    }
+
+    private void closeSideNav(boolean restoreFocus) {
+        closeSideNav(restoreFocus, null);
+    }
+
+    private void closeSideNav(boolean restoreFocus, Runnable after) {
+        if (sideNav == null || sideNav.getVisibility() != View.VISIBLE) return;
+        sideNavPanel.animate().translationX(-dp(260)).setDuration(180).start();
+        sideNav.animate().alpha(0f).setDuration(160).withEndAction(() -> {
+            sideNav.setVisibility(View.GONE);
+            if (restoreFocus && sideNavReturnFocus != null) sideNavReturnFocus.requestFocus();
+            else if (after != null) sideNav.post(after);
+        }).start();
+    }
+
+    private void paintSideNav() {
+        for (int i = 0; i < sideNavItems.size(); i++) {
+            TextView item = sideNavItems.get(i);
+            boolean focused = i == sideNavIndex;
+            item.setTextColor(focused ? Color.WHITE : 0x99FFFFFF);
+            item.setScaleX(focused ? 1.04f : 1f);
+            item.setScaleY(focused ? 1.04f : 1f);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setCornerRadius(dp(12));
+            bg.setColor(focused ? 0xFF272C35 : Color.TRANSPARENT);
+            if (focused) bg.setStroke(dp(1), 0x33FFFFFF);
+            item.setBackground(bg);
+        }
+    }
+
+    private void activateSideNav(int index) {
+        closeSideNav(false, () -> {
+            switch (index) {
+                case 0:
+                    activeNavIndex = 0;
+                    if (mediaRail != null) {
+                        mediaRail.recoverFromApps();
+                        mediaRail.focusMovies();
+                        root.post(() -> mediaRail.focusMovies());
+                    }
+                    break;
+                case 1:
+                    activeNavIndex = 1;
+                    Intent tv = getPackageManager().getLeanbackLaunchIntentForPackage("ar.tvplayer.tv");
+                    if (tv != null) startActivity(tv.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                    break;
+                case 2:
+                    activeNavIndex = 2;
+                    if (mediaRail != null) {
+                        mediaRail.recoverFromApps();
+                        mediaRail.focusMovies();
+                        root.post(() -> mediaRail.focusMovies());
+                    }
+                    break;
+                case 3:
+                    activeNavIndex = 3;
+                    if (mediaRail != null) {
+                        mediaRail.focusShows();
+                        root.post(() -> mediaRail.focusShows());
+                    }
+                    break;
+                case 4:
+                    activeNavIndex = 4;
+                    startActivity(new Intent(MainActivity.this, AppsCatalogActivity.class));
+                    break;
+                case 5:
+                    activeNavIndex = 5;
+                    startActivity(new Intent(MainActivity.this, BeastActivity.class));
+                    break;
+                case 6:
+                    activeNavIndex = 6;
+                    if (haAlert != null) haAlert.acknowledge();
+                    startActivity(new Intent(MainActivity.this, BeastActivity.class)
+                            .putExtra(BeastActivity.EXTRA_URL, getString(R.string.ha_url).trim()));
+                    break;
+                case 7:
+                    activeNavIndex = 7;
+                    if (launcherSettingsButton) startActivityForResult(
+                            new Intent(this, LauncherSettingsActivity.class), LAUNCHER_SETTINGS_REQUEST);
+                    else open(systemIntent(android.provider.Settings.ACTION_SETTINGS));
+                    break;
+            }
+        });
+    }
+
     /** Any key on Home restarts the countdown to the idle clock. */
     @Override
     public void onUserInteraction() {
@@ -1842,6 +2133,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (sideNav != null && sideNav.getVisibility() == View.VISIBLE
+                && event.getAction() == KeyEvent.ACTION_DOWN
+                && event.getKeyCode() == KeyEvent.KEYCODE_HOME) {
+            activeNavIndex = 0;
+            closeSideNav(true);
+            if (mediaRail != null) mediaRail.focusMovies();
+            return true;
+        }
         // Vendor keys (TCL Netflix button, 4062) never reach the key services, only the focused window, so their
         // "hold:" entries run here too or nowhere. Only while resumed: onPause releases Home's holds, and a DOWN
         // taken after that would arm one nothing releases.
@@ -1849,6 +2148,19 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 homeHoldAppKeys.get(event.getKeyCode()))) return true;
         if (handleSettingsKey(event)) return true;
         if (holdOk(event)) return true;
+        if (handleSideNav(event)) return true;
+        if ((sideNav == null || sideNav.getVisibility() != View.VISIBLE)
+                && event.getAction() == KeyEvent.ACTION_DOWN
+                && mediaRail != null && mediaRail.isMoviesIdle()) {
+            int key = event.getKeyCode();
+            if (key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT
+                    || key == KeyEvent.KEYCODE_DPAD_UP || key == KeyEvent.KEYCODE_DPAD_DOWN
+                    || key == KeyEvent.KEYCODE_DPAD_CENTER || key == KeyEvent.KEYCODE_ENTER) {
+                KeyEvent forwarded = new KeyEvent(event);
+                mediaRail.focusMoviesFromIdle(forwarded);
+                return true;
+            }
+        }
         if (tileMenuEnabled && !reordering && openPopup == null && cardPrompt == null
                 && event.getKeyCode() == KeyEvent.KEYCODE_MENU) {
             int position = focusedTilePosition();
@@ -2329,7 +2641,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         int color = adapter.ambientColorAt(position);
         float y = dockTopInRoot - 14 * density - 26 * density - hero.getHeight();
         float minTop = headerBottomInRoot();
-        if (mediaRail != null) mediaRail.placeAbove(y, minTop);
         if (IptvRail != null) IptvRail.placeAbove(y, minTop);
 
         // The media rail occupies the same band as the dock-app-name shelf. When it is showing, hide the shelf so
@@ -2519,18 +2830,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (mediaBackdropWorker == null) mediaBackdropWorker = Executors.newSingleThreadExecutor();
         final String fetchUrl = url;
         mediaBackdropWorker.execute(() -> {
-            // 512 px source feeds a 192×108 softened backdrop with a single blur pass: a much crisper, lightly
-            // defocused look that keeps the high-quality TMDB backdrop's detail. Still a small bitmap stretched by
-            // the ImageView (~80 KB), so there is still no per-frame blur cost (see HeroArt).
-            Bitmap raw = RailImages.fetch(fetchUrl, 512);
-            if (raw == null) return;                      // fetch miss: leave whatever is showing
-            Bitmap soft = HeroArt.fromBitmap(raw, 192, 108, 1);
-            raw.recycle();
-            if (soft == null) return;
+            Bitmap crisp = RailImages.fetch(fetchUrl, 1280);
+            if (crisp == null) return;                      // fetch miss: leave whatever is showing
             handler.post(() -> {
-                mediaBackdropCache.put(fetchUrl, soft);
+                mediaBackdropCache.put(fetchUrl, crisp);
                 // Only apply if this is still the item the user is on (focus may have moved during the fetch).
-                if (fetchUrl.equals(mediaBackdropKey)) swapMediaBackdrop(soft);
+                if (fetchUrl.equals(mediaBackdropKey)) swapMediaBackdrop(crisp);
             });
         });
     }
@@ -2797,7 +3102,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 handler.post(() -> {
                     if (showStats && stats != null && statsBg == bg) stats.setText(line);
                 });
-                if (statsBg == bg) bg.postDelayed(this, STATS_MS);
+                if (statsBg == bg) {
+                    bg.postDelayed(this, STATS_MS);
+                }
             }
         });
     }
@@ -2983,8 +3290,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
             if (position < COLUMNS) {
                 // Dock row: up to the rail when it shows, else let focus move to the top bar.
-                if (mediaRail != null && mediaRail.isShowing()) {
-                    mediaRail.focus();
+                if (mediaRail != null && mediaRail.hasItems()) {
+                    mediaRail.focusShows();
                     grid.playSoundEffect(SoundEffectConstants.NAVIGATION_UP);
                     return true;
                 }
@@ -3789,7 +4096,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             startDeadline = SystemClock.elapsedRealtime() + openOnStartWaitMs;
             handler.postDelayed(openWhenOnline, openOnStartWaitMs);
             // Validated between the check above and startPending: networkCallback may have skipped it.
-            if (OpenOnStart.online(this)) handler.post(openWhenOnline);
+            if (OpenOnStart.online(this)) {
+                handler.post(openWhenOnline);
+            }
             return false;
         }
         open(i);

@@ -152,14 +152,17 @@ final class TmdbClient {
         final String backdrop;  // full wide backdrop URL or ""
         final String logo;      // full title-logo URL or ""
         final String certification;   // US age rating, e.g. "PG-13", "R", "TV-MA"; "" when none
+        final int runtime;      // movie runtime or a show's typical episode length, in minutes
 
-        Info(String overview, double rating, int year, String backdrop, String logo, String certification) {
+        Info(String overview, double rating, int year, String backdrop, String logo,
+             String certification, int runtime) {
             this.overview = overview;
             this.rating = rating;
             this.year = year;
             this.backdrop = backdrop;
             this.logo = logo;
             this.certification = certification;
+            this.runtime = runtime;
         }
     }
 
@@ -179,6 +182,7 @@ final class TmdbClient {
                 + "&append_to_response=images," + ratings + "&include_image_language=en,null";
         String overview = "", date = "", backdrop = "", logo = "", certification = "";
         double rating = 0;
+        int runtime = 0;
         try (Reply reply = open(url)) {
             JsonReader r = reply.json;
             r.beginObject();
@@ -189,6 +193,16 @@ final class TmdbClient {
                     case "release_date":
                     case "first_air_date": date = string(r).trim(); break;
                     case "backdrop_path": backdrop = string(r).trim(); break;
+                    case "runtime": runtime = Math.max(runtime, (int) parseLong(string(r))); break;
+                    case "episode_run_time":
+                        if (r.peek() == JsonToken.BEGIN_ARRAY) {
+                            r.beginArray();
+                            while (r.hasNext()) runtime = Math.max(runtime, (int) parseLong(string(r)));
+                            r.endArray();
+                        } else {
+                            r.skipValue();
+                        }
+                        break;
                     case "images":
                         if (r.peek() == JsonToken.BEGIN_OBJECT) logo = firstLogo(r); else r.skipValue();
                         break;
@@ -205,7 +219,21 @@ final class TmdbClient {
         }
         String bd = backdropUrl(backdrop);
         String lg = logo.isEmpty() ? "" : "https://image.tmdb.org/t/p/w500" + logo;
-        return new Info(overview, rating, yearOf(date), bd == null ? "" : bd, lg, certification);
+        return new Info(overview, rating, yearOf(date), bd == null ? "" : bd, lg, certification, runtime);
+    }
+
+    static String runtimeText(int minutes) {
+        if (minutes <= 0) return "";
+        int hours = minutes / 60;
+        int remainder = minutes % 60;
+        if (hours == 0) return minutes + "m";
+        if (remainder == 0) return hours + "h";
+        return hours + "h " + remainder + "m";
+    }
+
+    static String ratingChip(String certification) {
+        if (certification == null || certification.trim().isEmpty()) return "";
+        return certification.trim();
     }
 
     /**
