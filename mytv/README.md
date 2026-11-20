@@ -72,7 +72,6 @@ copied over the launcher's on every build. Then run `build-and-install.ps1` for 
   Like the others, the room config must define it or that room's build fails.
 - `ha_page`: enables Home Assist in the left drawer. It opens the Home Assistant dashboard at `ha_url` full screen
   (arrows move a pointer, OK clicks). The host must be allowed as cleartext in `network_security_config.xml`.
-  MyTV does not hold a Home Assistant token, poll camera entities, or display motion alerts.
 
 Package names: TiviMate `ar.tvplayer.tv`, Netflix `com.netflix.ninja`, YouTube `com.google.android.youtube.tv`,
 Prime Video `com.amazon.amazonvideo.livingroom`, Disney+ `com.disney.disneyplus`, Hulu `com.hulu.livingroomplus`,
@@ -139,8 +138,7 @@ onn 4K Pro Streaming Device (jarvis2), Google TV 14, build URO3.260203.035.A1.15
   `install-write` / `install-commit`.
 - **Hidden from the grid**: Play Games (a stub that opens the Play Store), YouTube Music and Just Player
   (the Movies & Shows rail opens it for IPTV titles).
-- **Movies & Shows rail**: on, as in the other two rooms, using the Mediarium backend without a TV-facing panel.
-  Playing a "Local" download needs mpv
+- **Movies & Shows rail**: on, as in the other two rooms. Playing a "Local" download needs mpv
   (`is.xyz.mpv`), which is **not installed on this box yet**; Just Player (IPTV titles) is.
 - **No Inputs button**: a streaming box has no HDMI inputs or tuner, so `show_inputs_pill` is off and
   `live_tv_package` is empty.
@@ -174,9 +172,10 @@ onn. Streaming Device 4K pro (SNA), Google TV 14, build URO4.260304.011.B1.15051
 
 ## Secrets files (git-ignored, recreate on a new PC)
 
-Three files in `launcher\app\src\main\res\values\` hold the logins and addresses. They are ignored by git, so a
-fresh clone has none of them. Each one is built into the launcher, so after changing a value rebuild every room
-that uses it. Every file has the same shape; the values below are placeholders.
+Private logins and addresses live in local-only secret resource files under
+`launcher\app\src\main\res\values\`. They are ignored by git, so a fresh clone has none of them. Each one is
+built into the launcher, so after changing a value rebuild every room that uses it. The values below are
+placeholders for the documented IPTV and TMDB integrations.
 
 `iptv_secrets.xml`: the IPTV provider's Xtream Codes login. Used by the plain IPTV row and by the merged rail.
 
@@ -189,28 +188,6 @@ that uses it. Every file has the same shape; the values below are placeholders.
 </resources>
 ```
 
-`beast_secrets.xml`: the Beast (Mediarium) download library, for rooms with `media_rail` on. All four values are
-needed; if one is empty the Beast source is skipped and only IPTV shows.
-
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="beast_api_base" translatable="false">http://SERVER:PORT</string>
-    <string name="beast_api_key" translatable="false">API_KEY</string>
-    <string name="beast_library_root" translatable="false">/absolute/library/path</string>
-    <string name="beast_media_base" translatable="false">http://SERVER:FILE_PORT</string>
-</resources>
-```
-
-- `beast_api_base`: the Mediarium server, no trailing slash. It is only read for the dashboard and file paths.
-- `beast_api_key`: the Mediarium API key (admin). It is sent as an `X-API-Key` header only, never in a playback URL.
-- `beast_library_root`: the absolute library path the server reports as the start of each file path, for example
-  `/mnt/e/Media/Torrents`. It must match what the server reports exactly, or titles get no playback URL.
-- `beast_media_base`: the static HTTP file server rooted at that same folder, no trailing slash. Playback swaps
-  the library root for this address.
-- Both hosts must be allowed as cleartext in `launcher\app\src\main\res\xml\network_security_config.xml`, or the
-  launcher cannot reach them over plain HTTP.
-
 `tmdb_secrets.xml`: a TMDB v3 API key. It fetches the wide backdrops and the "Show more" Streaming section.
 Without it the rail still works, with posters instead of backdrops and an empty Streaming section.
 
@@ -220,9 +197,6 @@ Without it the rail still works, with posters instead of backdrops and an empty 
     <string name="tmdb_api_key" translatable="false">TMDB_V3_API_KEY</string>
 </resources>
 ```
-
-The rail turns on only when at least one of Beast or IPTV is fully set. Check what is missing with
-`git status --ignored launcher\app\src\main\res\values`.
 
 `calendar_secrets.xml`: the private "Secret address in iCal format" from Google Calendar, for the
 `calendar_widget` Events line. Anyone with this URL can read the whole calendar, so it is git-ignored and never
@@ -261,9 +235,7 @@ the row shows at once. The account allows 5 streams at once.
 The **Home Assist** drawer item opens the configured Home Assistant dashboard in a locked-down WebView. The remote
 drives an on-screen pointer: arrows move, OK clicks, and Back follows web history before leaving the page.
 
-The launcher does not embed a Home Assistant token, watch camera entities, keep a live event-stream connection, or
-show a motion popup/pill. Camera casts and other Home Assistant automations remain external to MyTV and can be
-revisited independently.
+Camera casts and other Home Assistant automations remain external to MyTV and can be revisited independently.
 
 ## Tried and removed: Plex row
 

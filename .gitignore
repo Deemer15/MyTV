@@ -21,20 +21,13 @@ bench-results/
 *.aab
 launcher/hs_err_pid*.log
 launcher/replay_pid*.log
-# IPTV rail login (Xtream Codes) stays local
-launcher/app/src/main/res/values/iptv_secrets.xml
-# Beast rail server addresses + API key stays local
-launcher/app/src/main/res/values/beast_secrets.xml
-# TMDB api key for the Streaming section stays local
-launcher/app/src/main/res/values/tmdb_secrets.xml
-
-# Calendar "Events" widget private ICS URL stays local
-launcher/app/src/main/res/values/calendar_secrets.xml
+# Private provider credentials, API keys and endpoint configuration stay local.
+launcher/app/src/main/res/values/*_secrets.xml
 # Per-room TV snapshots (serials, device names) stay local
 mytv/*/backups/
 .venv/
-# Mediarium read-only API key for local backend tooling stays local
-mytv/*/beast_key.txt
+# Private per-room keys stay local.
+mytv/*/*_key.txt
 # Per-room working folder (device notes, keys) stays local in this private fork
 mytv/
 # Kiro session export and editor workspace scratch
@@ -48,4 +41,3 @@ cleanyourtv.code-workspace
 /.github/agents/MyTV.agent.md
 # Home Assistant handoff: public IP, router and family details; stays local
 HA-CONTEXT.md
-launcher/app/src/main/res/values/ha_secrets.xml

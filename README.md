@@ -24,39 +24,12 @@ nothing here is meant for upstream. The original project's README is kept for re
   animation. Pressing Down from the Dashboard priority dock fades into this same catalogue; Up from its first row
   or Back restores the priority-app focus left behind. The drawer opens the same catalogue and keeps its existing
   drawer return behavior.
-- **Home Assist**: opens from the drawer through the guarded WebView. The launcher no longer exposes a Mediarium
-  web panel or polls Home Assistant for camera/motion alerts.
+- **Home Assist**: opens from the drawer through the guarded WebView.
 - **Series freshness**: a show moves up using its newest downloaded episode file's modification time, rather
   than the older date at which the series was first added.
 - **Weather widget** in place of the date next to the clock: current temperature, a condition icon and today's
   high and low, from the TV's own location.
 - **Per-room setups** under [`mytv/`](mytv/README.md): one config, debloat list and set of scripts per TV.
-
-## What is Mediarium (Beast)?
-
-"Beast" is my nickname for **[Mediarium](https://mediarium.app/)**, the self-hosted media server running on my
-home network. It is still the source behind the Dashboard's Local movies and Shows, but it has no TV-facing
-drawer destination or web panel. Nothing in it leaves the LAN.
-
-What it does:
-
-- **Keeps a download library.** Mediarium manages a library of downloaded movies and shows and serves the files
-  over my home network. The launcher reads that library for the "Local" titles in the rail and plays them in mpv.
-- **Feeds the rail alongside IPTV.** The Movies & Shows rail merges Mediarium's downloads with the newest movies
-  from my IPTV provider (read over its Xtream Codes API). When the same title exists in both, the download wins.
-  TMDB fills in the wide backdrops, logos, ratings and overviews.
-
-How the pieces fit:
-
-| Piece | Role |
-|-------|------|
-| Mediarium server ("Beast") | Self-hosted on the LAN: the download library and file server |
-| Dashboard rails | Mediarium downloads (mpv) + IPTV newest movies (Just Player), deduped, art from TMDB |
-| Apps page | Original CleanYourTV banner tiles in a standalone catalogue |
-
-The server addresses, the IPTV login and the TMDB key are **not** in this repo: they live in git-ignored
-`*_secrets.xml` files that a fresh clone recreates locally. See
-[`mytv/README.md`](mytv/README.md#secrets-files-git-ignored-recreate-on-a-new-pc) for the exact files.
 
 ### Dashboard, Shows and the Apps page
 
@@ -76,8 +49,7 @@ The side drawer replaces the old Home / Explore tabs:
   OK opens the show's season/episode page; Back returns to the previous screen.
 - **Apps** opens a separate catalogue rendered with the original launcher `AppAdapter` tiles and banner artwork.
   Its ordering is the launcher's configured ordering, not a new app sort.
-- **Home Assist** opens the configured Home Assistant dashboard. The launcher does not monitor cameras or show
-  motion alerts.
+- **Home Assist** opens the configured Home Assistant dashboard.
 - The full-screen backdrop, episode title, show title, year, runtime, age rating, `TMDb` score and overview follow
   the focused item.
 - **Age ratings** come from TMDB's US listing and appear next to the year, both here and on the Home showcase.
@@ -131,8 +103,8 @@ the launcher's on every build, so the launcher's copy always shows the last room
 2. Back it up first with `backup.ps1`. Check `dumpsys wifi | grep -o 'cname=[^ ]*'` before disabling the setup
    wizard: if it owns the saved Wi-Fi network, disabling it drops the TV off Wi-Fi.
 3. Copy the office `config.xml` into the new room's folder and change what the hardware needs (a streaming box
-   has no Live TV app or HDMI inputs). The main navigation is now in the side drawer, without TV-facing
-   Mediarium or camera-alert controls. Keep `weather_widget`, `explore_page` and `media_rail` on.
+   has no Live TV app or HDMI inputs). The main navigation is in the side drawer. Keep `weather_widget`,
+   `explore_page` and `media_rail` on.
 4. Disable the debloat batches one at a time with a screenshot between them, setup wizard last.
 5. Install mpv and Just Player if the room uses the rail, then run `build-and-install.ps1`.
 6. Push the theme, reboot once, and compare `pm list packages -d` before and after.
@@ -144,13 +116,9 @@ release APK must stay under 786,432 bytes (768 KiB); the current local build is 
 
 ## Not in this repo
 
-These stay on my PC on purpose, so a fresh clone will not build the rail until they are recreated:
+Private provider logins, local-library credentials, API keys, and device details stay on my PC on purpose.
 
-- `launcher\app\src\main\res\values\iptv_secrets.xml`, `beast_secrets.xml`, `tmdb_secrets.xml`: the IPTV login,
-  the Mediarium server addresses and API key, and the TMDB API key. The exact files and what each value means are
-  in [`mytv/README.md`](mytv/README.md#secrets-files-git-ignored-recreate-on-a-new-pc).
 - `mytv\*\backups\`: package and settings snapshots of each TV, taken before any change.
-- `mytv\Office\beast_key.txt`: the Beast server API key.
 - `tools\adbkey`: the ADB key that the TVs authorised.
 - `shots\`: screenshots, which show the Wi-Fi name.
 
