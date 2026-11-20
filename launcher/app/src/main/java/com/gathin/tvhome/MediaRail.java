@@ -81,22 +81,36 @@ final class MediaRail {
         /** The focused item changed (for the home backdrop); null when focus leaves the rail or is the "Show more" tile. */
         default void onItemFocused(MediaItem item) {}
         default void onRailMenu() {}
+        default void onDashboardPlayFocusTimedOut() {}
     }
 
     private void armMovieFocusTimeout() {
         main.removeCallbacks(clearMovieFocus);
-        if (!showingShows && row.findFocus() != null) {
+        if (section == Section.MOVIES && row.findFocus() != null) {
             main.postDelayed(clearMovieFocus, MOVIE_FOCUS_IDLE_MS);
         }
     }
 
     private void clearMovieFocusAfterIdle() {
-        if (released || !resumed || showingShows) return;
+        if (released || !resumed || section != Section.MOVIES) return;
         View focused = row.findFocus();
         if (focused == null) return;
         focused.clearFocus();
         row.clearFocus();
         enterMoviesIdle();
+    }
+
+    private void armDashboardPlayFocusTimeout() {
+        main.removeCallbacks(clearDashboardPlayFocus);
+        if (section == Section.DASHBOARD && playButton.hasFocus()) {
+            main.postDelayed(clearDashboardPlayFocus, MOVIE_FOCUS_IDLE_MS);
+        }
+    }
+
+    private void clearDashboardPlayFocusAfterIdle() {
+        if (released || !resumed || section != Section.DASHBOARD || !playButton.hasFocus()) return;
+        playButton.clearFocus();
+        host.onDashboardPlayFocusTimedOut();
     }
 
     private static final String TAG = "MediaRail";
@@ -154,6 +168,8 @@ final class MediaRail {
 
     /** The rail's content filter, chosen by the tab row above the showcase. */
     private enum Filter { ALL, MOVIES, SHOWS }
+    /** Dashboard uses the priority-app row, while Movies and Shows use their own media rails. */
+    private enum Section { DASHBOARD, MOVIES, SHOWS }
 
     private final LinearLayout container;
     private final LinearLayout tabRow;       // Explore / Movies / Shows, above the showcase (replaces the old header)
@@ -175,11 +191,12 @@ final class MediaRail {
     private final TextView featuredTitle;    // the showcase title
     private final TextView featuredSub;       // detail line: "year · source · added" or "N new episodes"
     private final TextView featuredOverview;
+    private final TextView playButton;
     private final RecyclerView row;
     private final RecyclerView showsRow;
     private final TextView recentLabel;
     private final TextView showsLabel;
-    private boolean showingShows;
+    private Section section = Section.DASHBOARD;
     private final Adapter adapter = new Adapter(false);
     private final Adapter showsAdapter = new Adapter(true);
 
@@ -204,6 +221,7 @@ final class MediaRail {
     private final Runnable rotateTick = this::rotateBeat;
     private static final long MOVIE_FOCUS_IDLE_MS = 10_000;
     private final Runnable clearMovieFocus = this::clearMovieFocusAfterIdle;
+    private final Runnable clearDashboardPlayFocus = this::clearDashboardPlayFocusAfterIdle;
     private static final long ROTATE_BEAT_MS = 1_000;
     /** Idle time accumulated toward the next advance; reset to 0 whenever the user acts or rotation can't run. */
     private long idleMs;
@@ -347,16 +365,56 @@ final class MediaRail {
         showText.addView(featuredTitle, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
+        LinearLayout detailHeader = new LinearLayout(context);
+        detailHeader.setOrientation(LinearLayout.HORIZONTAL);
+        detailHeader.setGravity(Gravity.CENTER_VERTICAL);
+        detailHeader.setClipChildren(false);
+        detailHeader.setClipToPadding(false);
+
         featuredSub = new TextView(context);
         featuredSub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
         featuredSub.setTextColor(0xDDFFFFFF);
         featuredSub.setTypeface(UiFont.get(context, R.string.font_regular));
         featuredSub.setSingleLine(true);
         featuredSub.setEllipsize(TextUtils.TruncateAt.END);
-        LinearLayout.LayoutParams fsLp = new LinearLayout.LayoutParams(
+        featuredSub.setMaxWidth(dp(470));
+        detailHeader.addView(featuredSub, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        playButton = new TextView(context);
+        playButton.setText(R.string.media_rail_play);
+        playButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        playButton.setTypeface(UiFont.get(context, R.string.font_medium));
+        playButton.setTextColor(new ColorStateList(
+                new int[][] {{android.R.attr.state_focused}, {}},
+                new int[] {Color.BLACK, Color.WHITE}));
+        playButton.setSingleLine(true);
+        playButton.setGravity(Gravity.CENTER);
+        playButton.setPadding(dp(16), dp(7), dp(16), dp(7));
+        playButton.setBackground(playButtonBackground());
+        playButton.setFocusable(true);
+        playButton.setFocusableInTouchMode(false);
+        playButton.setVisibility(View.GONE);
+        playButton.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+        playButton.setOnClickListener(v -> activateFeatured());
+        playButton.setOnKeyListener((v, keyCode, event) -> onPlayKey(keyCode, event));
+        playButton.setOnFocusChangeListener((v, focused) -> {
+            v.animate().cancel();
+            v.animate().scaleX(focused ? 1.06f : 1f).scaleY(focused ? 1.06f : 1f)
+                    .setDuration(120).start();
+            main.removeCallbacks(clearDashboardPlayFocus);
+            if (focused && section == Section.DASHBOARD) armDashboardPlayFocusTimeout();
+            if (focused) rescheduleRotation();
+        });
+        LinearLayout.LayoutParams playLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        playLp.setMarginStart(dp(14));
+        detailHeader.addView(playButton, playLp);
+
+        LinearLayout.LayoutParams headerLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        fsLp.topMargin = dp(3);
-        showText.addView(featuredSub, fsLp);
+        headerLp.topMargin = dp(3);
+        showText.addView(detailHeader, headerLp);
 
         featuredOverview = new TextView(context);
         featuredOverview.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
@@ -424,6 +482,8 @@ final class MediaRail {
         showsRow.setAdapter(showsAdapter);
         body.addView(showsRow, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(CARD_H)));
+        recentLabel.setVisibility(View.GONE);
+        row.setVisibility(View.GONE);
         showsLabel.setVisibility(View.GONE);
         showsRow.setVisibility(View.GONE);
 
@@ -443,7 +503,8 @@ final class MediaRail {
     // ---- placement and visibility ----------------------------------------------------------------
 
     int height() {
-        return dp(SHOWCASE_H + SECTION + CARD_H + 14);
+        return dp(SHOWCASE_H + 14
+                + (section == Section.DASHBOARD ? 0 : SECTION + CARD_H));
     }
 
     /** The rail band's pixel height — Home uses it to leave room above the dock so the band never overlaps it. */
@@ -492,7 +553,7 @@ final class MediaRail {
         // Focus the showcase once it has been laid out (post handles the resume frame not being drawn yet).
         container.post(() -> {
             if (!released && wantsFocusOnResume == false && container.getVisibility() == View.VISIBLE) {
-                focusMovies();
+                focusCurrent();
             }
         });
         return true;
@@ -504,24 +565,9 @@ final class MediaRail {
         return wantsFocusOnResume && !released && itemCount() > 0;
     }
 
-    /** True when the rail is present with content to focus — the real "top" of a layout that has the rail, so a
-     *  Home-button press lands here (and the rail stays shown) rather than snapping to the first dock tile. */
+    /** True when the spotlight has content that can be presented and played. */
     boolean hasItems() {
         return !released && itemCount() > 0;
-    }
-
-    /** Home button pressed while Home is in front: the rail is the top of this layout, so bring it on screen and
-     *  put focus on the showcase. Returns false (nothing to do) when the rail has no content, so Home falls back to
-     *  focusing the first dock tile. Mirrors restoreFocusIfRequested without needing the resume flag armed. */
-    boolean focusFromHomeKey() {
-        if (released || itemCount() == 0) return false;
-        gridAtTop = true;
-        placed = true;
-        updateVisibility();
-        container.post(() -> {
-            if (!released && container.getVisibility() == View.VISIBLE) focus();
-        });
-        return true;
     }
 
     /** Clears the pending "focus the rail on resume" request (e.g. the user pressed Home, not Back from a player). */
@@ -538,35 +584,97 @@ final class MediaRail {
     }
 
     boolean isShowsActive() {
-        return showingShows;
+        return section == Section.SHOWS;
+    }
+
+    boolean isDashboardActive() {
+        return section == Section.DASHBOARD;
     }
 
     void focus() {
         if (itemCount() == 0) return;
         updateVisibility();
+        gridAtTop = true;
+        switch (section) {
+            case DASHBOARD:
+                focusPlay();
+                break;
+            case MOVIES:
+                focusMovies();
+                break;
+            case SHOWS:
+                focusShows();
+                break;
+        }
+    }
+
+    void focusDashboard() {
+        section = Section.DASHBOARD;
+        main.removeCallbacks(clearMovieFocus);
+        main.removeCallbacks(clearDashboardPlayFocus);
+        applySectionRows();
+        updateVisibility();
         container.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
         gridAtTop = true;
-        focusFirst(showingShows ? showsRow : row);
+        idleMs = 0;
+        rescheduleRotation();
     }
 
     void focusShows() {
         updateVisibility();
         if (showsAdapter.getItemCount() == 0) {
-            focus();
             return;
         }
-        if (!showingShows) switchRail(true, true);
-        else focusFirst(showsRow);
+        boolean wasMovies = section == Section.MOVIES;
+        if (wasMovies) {
+            switchRail(true, true);
+        } else {
+            section = Section.SHOWS;
+            applySectionRows();
+            focusFirst(showsRow);
+        }
         main.removeCallbacks(rotateTick);
+        main.removeCallbacks(clearMovieFocus);
+        main.removeCallbacks(clearDashboardPlayFocus);
         idleMs = 0;
     }
 
     void focusMovies() {
-        boolean wasShows = showingShows;
+        boolean wasShows = section == Section.SHOWS;
         updateVisibility();
-        if (showingShows) switchRail(false, false);
-        enterMoviesIdle();
+        if (wasShows) {
+            switchRail(false, true);
+        } else {
+            section = Section.MOVIES;
+            applySectionRows();
+            focusFirst(row);
+        }
+        main.removeCallbacks(clearDashboardPlayFocus);
         if (wasShows) onResumed();
+    }
+
+    void focusCurrent() {
+        switch (section) {
+            case DASHBOARD:
+                focusPlay();
+                break;
+            case MOVIES:
+                focusMovies();
+                break;
+            case SHOWS:
+                focusShows();
+                break;
+        }
+    }
+
+    void focusPlay() {
+        if (itemCount() == 0 || playButton.getVisibility() != View.VISIBLE) return;
+        container.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+        playButton.postOnAnimation(() -> {
+            if (!released && playButton.requestFocus() && section == Section.DASHBOARD) {
+                armDashboardPlayFocusTimeout();
+            }
+        });
     }
 
     void enterMoviesIdle() {
@@ -578,7 +686,7 @@ final class MediaRail {
     }
 
     boolean isMoviesIdle() {
-        return !showingShows && row.findFocus() == null;
+        return section == Section.MOVIES && row.findFocus() == null && !playButton.hasFocus();
     }
 
     void focusMoviesFromIdle(KeyEvent event) {
@@ -601,7 +709,6 @@ final class MediaRail {
         placed = true;
         gridAtTop = true;
         updateVisibility();
-        container.post(this::focus);
     }
 
     /** Number of real media items (not counting the Show-more state). */
@@ -760,6 +867,16 @@ final class MediaRail {
         return true;
     }
 
+    /** Moves within playable spotlight items only; the Play control never enters the separate Show-more state. */
+    private void moveFeaturedSelection(int delta) {
+        int next = Math.max(0, Math.min(itemCount() - 1, selected + delta));
+        if (next != selected) {
+            selected = next;
+            bindSelected();
+        }
+        rescheduleRotation();
+    }
+
     // ---- auto-rotate: advance the showcase while idle, looping past the last item (never "Show more") ----
 
     /** One heartbeat: when rotation is allowed, add this beat to the idle clock and advance once it reaches
@@ -788,7 +905,7 @@ final class MediaRail {
         return resumed && !released
                 && container.getVisibility() == View.VISIBLE && gridAtTop && placed
                 && picker == null
-                && !showingShows
+                && section != Section.SHOWS
                 && row.findFocus() == null && showsRow.findFocus() == null
                 && itemCount() >= 2;
     }
@@ -832,6 +949,7 @@ final class MediaRail {
         main.removeCallbacks(rotateTick);
         main.postDelayed(rotateTick, ROTATE_BEAT_MS);
         armMovieFocusTimeout();
+        armDashboardPlayFocusTimeout();
     }
 
     /** Home paused/stopped: stop the heartbeat so a backgrounded launcher doesn't keep stepping the showcase, and
@@ -840,6 +958,7 @@ final class MediaRail {
         resumed = false;
         main.removeCallbacks(rotateTick);
         main.removeCallbacks(clearMovieFocus);
+        main.removeCallbacks(clearDashboardPlayFocus);
         body.animate().cancel();
         body.setAlpha(1f);
     }
@@ -852,6 +971,49 @@ final class MediaRail {
         }
         if (selected < 0 || selected >= itemCount()) return;
         open(spotlightItems.get(selected), showcase);
+    }
+
+    private void activateFeatured() {
+        if (heroItem != null) {
+            open(heroItem, playButton);
+            return;
+        }
+        activateSelected();
+    }
+
+    private boolean onPlayKey(int keyCode, KeyEvent event) {
+        if (event.getAction() != KeyEvent.ACTION_DOWN) {
+            return keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN
+                    || keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT;
+        }
+        rescheduleRotation();
+        if (section == Section.DASHBOARD) armDashboardPlayFocusTimeout();
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_DPAD_UP:
+                host.onRailUp();
+                return true;
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+                if (section == Section.DASHBOARD) host.onRailDown();
+                else if (section == Section.SHOWS) focusFirst(showsRow);
+                else focusFirst(row);
+                return true;
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                if (section != Section.SHOWS) {
+                    moveFeaturedSelection(playButton.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL ? +1 : -1);
+                }
+                return true;
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                if (section != Section.SHOWS) {
+                    moveFeaturedSelection(playButton.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL ? -1 : +1);
+                }
+                return true;
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_ENTER:
+                activateFeatured();
+                return true;
+            default:
+                return false;
+        }
     }
 
     /** Points the showcase, the strip (everything after the selection) and the home backdrop at the current
@@ -881,6 +1043,7 @@ final class MediaRail {
      *  box reads as a real "see everything" card rather than an empty box. */
     private void bindShowMore() {
         heroItem = null;
+        playButton.setVisibility(View.GONE);
         showcaseRating.setVisibility(View.GONE);
         if (!spotlightItems.isEmpty()) {
             loadImage(showcaseImage, wideArt(spotlightItems.get(0)));
@@ -1005,6 +1168,7 @@ final class MediaRail {
         released = true;
         main.removeCallbacks(rotateTick);
         main.removeCallbacks(clearMovieFocus);
+        main.removeCallbacks(clearDashboardPlayFocus);
         dismissPicker();
         worker.shutdownNow();
         metadataPool.shutdownNow();
@@ -1028,7 +1192,7 @@ final class MediaRail {
         bindSelected();
         updateVisibility();
         rescheduleRotation();   // first data (or a refresh) may make rotation possible for the first time
-        if (firstData) container.post(this::focus);
+        if (firstData && section != Section.DASHBOARD) container.post(this::focus);
     }
 
     private List<MediaItem> readCache() {
@@ -1436,6 +1600,7 @@ final class MediaRail {
     /** The showcase when the chosen tab has no items (e.g. no Shows yet): a short message, no art, no backdrop. */
     private void bindEmptyFilter() {
         heroItem = null;
+        playButton.setVisibility(View.GONE);
         showcaseRating.setVisibility(View.GONE);
         showcaseImage.setAlpha(1f);
         showcaseImage.setImageDrawable(null);
@@ -1457,11 +1622,14 @@ final class MediaRail {
             showcaseImage.setImageDrawable(null);
             showcaseImage.setTag(null);
             showcaseRating.setVisibility(View.GONE);
+            playButton.setVisibility(View.GONE);
             return;
         }
         loadImage(showcaseImage, wideArt(it));
         maybeFetchBackdrop(it);   // the provider gave only a poster: fill a wide 16:9 backdrop from TMDB if we can
         featuredTitle.setText(it.isSeries ? it.title : it.spotlightTitle());
+        playButton.setVisibility(View.VISIBLE);
+        playButton.setContentDescription(context.getString(R.string.media_rail_play) + " " + it.spotlightTitle());
         TmdbClient.Info info = metadataCache.get(metadataKey(it));
         showcaseRating.setVisibility(View.GONE);
         featuredSub.setText(detailLine(it, info));
@@ -1876,7 +2044,7 @@ final class MediaRail {
         }
         if (!fromShows) armMovieFocusTimeout();
         if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-            host.onRailUp();
+            focusPlay();
             return true;
         }
         if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
@@ -1920,7 +2088,10 @@ final class MediaRail {
             int tries;
             @Override public void run() {
                 RecyclerView.ViewHolder holder = target.findViewHolderForAdapterPosition(0);
-                if (holder != null && holder.itemView.requestFocus()) return;
+                if (holder != null && holder.itemView.requestFocus()) {
+                    if (target == row && section == Section.MOVIES) armMovieFocusTimeout();
+                    return;
+                }
                 if (tries++ < 12 && target.getAdapter() != null
                         && target.getAdapter().getItemCount() > 0) {
                     target.postOnAnimation(this);
@@ -1929,13 +2100,46 @@ final class MediaRail {
         });
     }
 
+    private void applySectionRows() {
+        View[] views = {recentLabel, row, showsLabel, showsRow};
+        for (View view : views) {
+            view.animate().cancel();
+            view.setTranslationY(0f);
+            view.setAlpha(1f);
+        }
+        recentLabel.setVisibility(section == Section.MOVIES ? View.VISIBLE : View.GONE);
+        row.setVisibility(section == Section.MOVIES ? View.VISIBLE : View.GONE);
+        showsLabel.setVisibility(section == Section.SHOWS ? View.VISIBLE : View.GONE);
+        showsRow.setVisibility(section == Section.SHOWS ? View.VISIBLE : View.GONE);
+        resizeContainer();
+    }
+
+    private void resizeContainer() {
+        ViewGroup.LayoutParams lp = container.getLayoutParams();
+        if (lp != null && lp.height != height()) {
+            lp.height = height();
+            container.setLayoutParams(lp);
+        }
+    }
+
     private void switchRail(boolean shows, boolean focus) {
-        if (showingShows == shows) {
+        Section target = shows ? Section.SHOWS : Section.MOVIES;
+        if (section == target) {
             if (focus) focusFirst(shows ? showsRow : row);
             return;
         }
-        showingShows = shows;
-        if (shows) main.removeCallbacks(clearMovieFocus);
+        if (section == Section.DASHBOARD) {
+            section = target;
+            applySectionRows();
+            if (focus) focusFirst(shows ? showsRow : row);
+            return;
+        }
+        section = target;
+        resizeContainer();
+        if (shows) {
+            main.removeCallbacks(clearMovieFocus);
+            main.removeCallbacks(clearDashboardPlayFocus);
+        }
         View outgoingLabel = shows ? recentLabel : showsLabel;
         View outgoingRow = shows ? row : showsRow;
         View incomingLabel = shows ? showsLabel : recentLabel;
@@ -1961,7 +2165,7 @@ final class MediaRail {
                     incomingLabel.animate().alpha(1f).translationY(0f).setDuration(180).start();
                     incomingRow.animate().alpha(1f).translationY(0f).setDuration(180)
                             .withEndAction(() -> {
-                                if (focus && showingShows == shows) {
+                                if (focus && section == target) {
                                     focusFirst(shows ? showsRow : row);
                                 }
                             }).start();
@@ -1978,6 +2182,20 @@ final class MediaRail {
         s.addState(new int[] {android.R.attr.state_focused}, on);
         s.addState(new int[] {}, new GradientDrawable());
         return s;
+    }
+
+    private StateListDrawable playButtonBackground() {
+        GradientDrawable focused = new GradientDrawable();
+        focused.setCornerRadius(dp(100));
+        focused.setColor(Color.WHITE);
+        GradientDrawable rest = new GradientDrawable();
+        rest.setCornerRadius(dp(100));
+        rest.setColor(0x33FFFFFF);
+        rest.setStroke(dp(1), 0x99FFFFFF);
+        StateListDrawable states = new StateListDrawable();
+        states.addState(new int[] {android.R.attr.state_focused}, focused);
+        states.addState(new int[] {}, rest);
+        return states;
     }
 
     /**

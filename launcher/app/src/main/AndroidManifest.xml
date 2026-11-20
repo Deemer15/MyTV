@@ -117,9 +117,9 @@
             </intent-filter>
         </activity>
 
-        <!-- Beast pill (config beast_page): the Mediarium web panel full screen. -->
+        <!-- Home Assistant dashboard, opened from the drawer. -->
         <activity
-            android:name=".BeastActivity"
+            android:name=".HomeAssistantActivity"
             android:exported="false"
             android:excludeFromRecents="true"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize"

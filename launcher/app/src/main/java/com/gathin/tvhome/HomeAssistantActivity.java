@@ -22,18 +22,12 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 
 /**
- * "Beast": the Mediarium web panel (config beast_url) full screen, opened from the Beast pill in the top bar.
- * You sign in once with the remote; the session cookie is kept, so later visits open signed in. Only the panel's own
- * address loads here: a link to anywhere else is refused, so the page can't wander off to the internet.
- * Back goes back inside the panel, and leaves when there is nothing to go back to.
+ * Home Assistant dashboard in a full-screen guarded WebView. Only the configured origin loads, and the session
+ * cookie is kept after sign-in. Back follows the web history before leaving the page.
  */
-public class BeastActivity extends Activity {
-    /** Intent extra: the page to open. Without it the page is beast_url. */
-    static final String EXTRA_URL = "com.gathin.tvhome.URL";
-    /** CSS width a page opened from EXTRA_URL (the Home Assistant dashboard) is laid out at. A 1080p TV at density 320
-     *  reports only about 960 CSS px, which gives a dashboard its tablet layout; 1920 gives it the desktop one. */
+public class HomeAssistantActivity extends Activity {
+    /** CSS width the Home Assistant dashboard is laid out at. */
     private static final int DESKTOP_WIDTH = 1920;
-    private boolean desktop;
     private WebView web;
     private String home;
     private String origin;
@@ -45,10 +39,11 @@ public class BeastActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        // The page to open: the house pill passes the Home Assistant dashboard; Beast opens its own panel.
-        String given = getIntent().getStringExtra(EXTRA_URL);
-        desktop = given != null && !given.trim().isEmpty();
-        home = desktop ? given.trim() : getString(R.string.beast_url).trim();
+        home = getString(R.string.ha_url).trim();
+        if (home.isEmpty()) {
+            finish();
+            return;
+        }
         android.net.Uri u = android.net.Uri.parse(home);
         origin = u.getScheme() + "://" + u.getAuthority();
 
@@ -82,7 +77,7 @@ public class BeastActivity extends Activity {
 
             @Override
             public void onReceivedError(WebView view, int code, String description, String failingUrl) {
-                error.setText(getString(R.string.beast_unreachable, origin));
+                error.setText(getString(R.string.home_assistant_unreachable, origin));
                 error.setVisibility(View.VISIBLE);
             }
 
@@ -113,9 +108,8 @@ public class BeastActivity extends Activity {
         else web.loadUrl(home);
     }
 
-    /** Lays the Home Assistant page out DESKTOP_WIDTH CSS px wide by rewriting its viewport tag; Beast is left alone. */
+    /** Lays the Home Assistant page out DESKTOP_WIDTH CSS px wide by rewriting its viewport tag. */
     private void widen(WebView view) {
-        if (!desktop) return;
         view.evaluateJavascript("(function(){var m=document.querySelector('meta[name=viewport]');"
                 + "if(!m){m=document.createElement('meta');m.name='viewport';document.head.appendChild(m);}"
                 + "m.setAttribute('content','width=" + DESKTOP_WIDTH + "');})();", null);

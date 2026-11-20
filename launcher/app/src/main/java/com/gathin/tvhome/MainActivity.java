@@ -121,9 +121,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * time arrives; the clock, date and greeting stay hidden before then.
      */
     private static final long TIME_VALID_AFTER_MS = 1_735_689_600_000L;
-    /** One-shot: a Home-button press (onNewIntent) chose to land focus on the media rail, so the onResume that
-     *  follows must not let its tile rebuild grab focus back to the grid (which would hide the rail). */
-    private boolean railFocusAfterHome;
     private String liveTvPkg;
     /** Launcher settings' change count this Home was built with (see onResume). */
     private long settingsRevision;
@@ -155,7 +152,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private int sideNavIndex;
     private int activeNavIndex;
     private String pendingNavTarget;
+    private int pendingDashboardPosition = -1;
     private View sideNavReturnFocus;
+    private boolean dashboardLeftArmed;
     private WallpaperPlayer wallpaperPlayer;
     private GlassView glass;
     /** "Latest movies" above the dock (res/values/iptv_rail.xml); null when off. */
@@ -389,10 +388,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private RecyclerView.OnScrollListener pendingFocusScroll;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
-    /** The house pill and its motion warning (HaAlert); haAlert is null when there is no token or ha_alert is off. */
-    private TextView btnHomePill;
-    private android.graphics.drawable.Drawable homePillNormal;   // the pill's own background, kept while it is red
-    private HaAlert haAlert;
     /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
         @Override
@@ -1116,24 +1111,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             libraryFromTopBar = true;   // closing it goes back to this button, not to the pill after the last row
         });
         btnLibraryTop.setVisibility(cfg.libraryButton && cfg.appLibrary ? View.VISIBLE : View.GONE);
-        // House pill: the Home Assistant dashboard, full screen, on the same page as Beast (config ha_page, ha_url).
-        btnHomePill = (TextView) findViewById(R.id.btnHome);
-        btnHomePill.setVisibility(View.GONE);
-        if (getResources().getBoolean(R.bool.ha_page) && !getString(R.string.ha_url).trim().isEmpty()) {
-            // Motion warning (config ha_alert, token in ha_secrets.xml): the pill turns red while a camera sensor is on.
-            haAlert = HaAlert.create(this, handler, this::showHaAlert);
-            btnHomePill.setOnClickListener(v -> {
-                if (haAlert != null) haAlert.acknowledge();   // clears here and on every other TV
-                startActivity(new Intent(this, BeastActivity.class)
-                        .putExtra(BeastActivity.EXTRA_URL, getString(R.string.ha_url).trim()));
-            });
-        }
-        // Beast: the Mediarium panel on the media server, full screen (config beast_page, beast_url).
-        View btnBeast = findViewById(R.id.btnBeast);
-        btnBeast.setVisibility(View.GONE);
-        if (getResources().getBoolean(R.bool.beast_page) && !getString(R.string.beast_url).trim().isEmpty()) {
-            btnBeast.setOnClickListener(v -> startActivity(new Intent(this, BeastActivity.class)));
-        }
         addTopBarApps(cfg.topBarApps, cfg.launchActions);
         iconOnlyButtons = cfg.iconOnlyButtons;
         topMenu = cfg.topMenu;
@@ -1214,8 +1191,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnSettings.setOnKeyListener(pillKeys);
         btnReorder.setOnKeyListener(pillKeys);
         btnLibraryTop.setOnKeyListener(pillKeys);
-        if (btnHomePill != null) btnHomePill.setOnKeyListener(pillKeys);
-        findViewById(R.id.btnBeast).setOnKeyListener(pillKeys);
         for (View button : topAppButtons) button.setOnKeyListener(pillKeys);
         if (advancedEffects) {
             List<View> pills = new ArrayList<>(Arrays.asList(btnInputs, btnWifi, btnVpn, btnReorder, btnLibraryTop, btnSettings));
@@ -1239,12 +1214,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (dockRow && !singleRow) {
             mediaRail = MediaRail.create(this, root, glass, new MediaRail.Host() {
                 @Override public void onRailUp() {
-                    grid.setAlpha(0f);
+                    grid.setAlpha(activeNavIndex == 0 ? 1f : 0f);
                     grid.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
                     (btnInputs.getVisibility() == View.VISIBLE ? btnInputs : firstTopButton()).requestFocus();
                 }
 
-                @Override public void onRailDown() { }
+                @Override public void onRailDown() {
+                    if (activeNavIndex == 0) focusDashboardApps();
+                }
 
                 @Override public void onRailFocused() {
                     grid.setAlpha(0f);
@@ -1259,6 +1236,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
                 @Override public void onRailMenu() {
                     openSideNav();
+                }
+
+                @Override public void onDashboardPlayFocusTimedOut() {
+                    if (activeNavIndex == 0) focusDashboardApps();
                 }
             });
             if (mediaRail != null) {
@@ -1275,7 +1256,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 grid.requestLayout();
                 grid.post(() -> mediaRail.placeBelowHeader(headerBottomInRoot()));
                 grid.post(() -> {
-                    if (mediaRail.isShowing()) grid.setAlpha(0f);
+                    if (mediaRail.isShowing() && activeNavIndex != 0) grid.setAlpha(0f);
                 });
                 root.post(() -> mediaRail.placeBelowHeader(headerBottomInRoot()));
             } else {
@@ -1414,9 +1395,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     /**
      * Home pressed while Home is already in front: singleTask delivers it here, then onResume runs.
-     * Back to the top, like the stock launcher. With the media rail present the top is the rail (its showcase),
-     * so focus lands there; otherwise the first dock tile. Back from an app never comes this way, so returning to
-     * the app you left from is unchanged (#118).
+     * Back to Dashboard and its first priority app, like the stock launcher. Back from an app never comes this
+     * way, so returning to the app you left from is unchanged (#118).
      */
     @Override
     protected void onNewIntent(Intent intent) {
@@ -1431,11 +1411,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 : intent != null && intent.getBooleanExtra("focus_shows", false) ? "shows"
                 : intent != null && intent.getBooleanExtra("open_tv", false) ? "tv"
                 : intent != null && intent.getBooleanExtra("open_settings", false) ? "settings"
-                : intent != null && intent.getBooleanExtra("open_beast", false) ? "beast"
                 : intent != null && intent.getBooleanExtra("open_ha", false) ? "ha"
                 : intent != null && intent.getBooleanExtra("open_dashboard", false) ? "dashboard" : null;
         if (target != null) {
             pendingNavTarget = target;
+            pendingDashboardPosition = "dashboard".equals(target)
+                    ? intent.getIntExtra(AppsCatalogActivity.EXTRA_DASHBOARD_APP_POSITION, -1)
+                    : -1;
             setIntent(new Intent(Intent.ACTION_MAIN));
             return;
         }
@@ -1445,29 +1427,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (intent == null || !intent.hasCategory(Intent.CATEGORY_HOME)) return;
         activeNavIndex = 0;
         pendingNavTarget = "dashboard";
+        pendingDashboardPosition = -1;
+        dismissSideNavForHome();
         if (gameDay != null && !stopped) gameDay.read();
         grid.scrollToPosition(0);
         lastFocused = 0;
         lastFocusedKey = adapter.getItemCount() > 0 ? adapter.keyAt(0) : null;
-        // The media rail sits above the dock and is the true top of the layout. Focusing a dock tile here would
-        // nudge the grid's scroll offset and flip the rail's grid-at-top flag false, hiding the rail on a Home
-        // press. So when the rail has content, land focus on it (which also keeps it on screen).
-        boolean railTakesFocus = mediaRail != null && mediaRail.hasItems();
-        if (mediaRail != null) {
-            mediaRail.recoverFromApps();
-            mediaRail.focusMovies();
-        }
+        selectDashboard();
         if (stopped) {
-            // A real resume (with a tile rebuild) is coming: tell it not to let the grid grab focus back off the
-            // rail. Only armed here, where onResume follows, so the flag can't go stale on the overlay path below.
-            railFocusAfterHome = railTakesFocus;
             tileRefresh.onHomeAgain();
-            if (railTakesFocus) grid.post(() -> mediaRail.focusFromHomeKey());
-        } else {
-            // Still on screen (the quick panel was over it, or Home was already in front): the tiles are current,
-            // so only go back to the top; rebuilding would replay the entrance animation for nothing.
-            if (railTakesFocus) grid.post(() -> mediaRail.focusFromHomeKey());
-            else grid.post(() -> focusTile(0));
         }
     }
 
@@ -1492,7 +1460,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onResume() {
         super.onResume();
         resumed = true;
-        if (haAlert != null) haAlert.start();   // the live connection runs only while Home is in front
         // A festival that started or ended while Home was in the background: rebuild with or without it.
         if (festive != festival.active(LocalDate.now())) {
             recreate();
@@ -1510,13 +1477,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (IptvRail != null) IptvRail.refresh();   // asks the provider when Home comes up, at most every 10 min
         if (mediaRail != null) mediaRail.refresh(); // asks both sources when Home comes up, at most every 10 min
         if (grid.getAdapter() == null) grid.setAdapter(adapter);   // dropped by onTrimMemory
-        // If the user left Home from the media rail (to play something or browse), the rail owns focus on this
-        // resume. The tile rebuild below must then NOT also post focus back to a grid tile: that focus-scroll
-        // fires the grid's OnScrollListener -> setGridAtTop(false) and pulls focus off the showcase, which hid the
-        // rail right after it appeared ("flashes then disappears"). Skip the grid's focus restore in that case.
+        // Movies, Shows and a Play pill that launched media own focus while they resume. Dashboard gives focus
+        // to its priority-app row, so a normal grid restore must remain enabled there.
         boolean railOwnsFocus = mediaRail != null
-                && (mediaRail.hasItems() || mediaRail.wantsFocusOnResume() || railFocusAfterHome);
-        railFocusAfterHome = false;   // one-shot: consumed by this resume
+                && (activeNavIndex == 2 || activeNavIndex == 3 || mediaRail.wantsFocusOnResume());
         switch (tileRefresh.onResume(packagesChangedSinceRebuild())) {
             case REBUILD:
                 tilesReady = false;
@@ -1531,42 +1495,35 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 break;
         }
         if (openLiveTvAfterBoot()) return;
-        // If the user left the media rail to play something or browse, put focus back on the showcase so returning
-        // lands where they were — and so the rail is guaranteed on screen.
-        if (mediaRail != null) mediaRail.restoreFocusIfRequested();
         if (mediaRail != null) {
             mediaRail.onResumed();   // allow idle auto-rotation now Home is in front again
             root.post(() -> mediaRail.placeBelowHeader(headerBottomInRoot()));
-            if (railOwnsFocus) grid.post(mediaRail::focusMovies);
+            boolean restored = mediaRail.restoreFocusIfRequested();
+            if (railOwnsFocus && !restored) grid.post(mediaRail::focusCurrent);
         }
         if (pendingNavTarget != null) {
             String target = pendingNavTarget;
+            int dashboardPosition = pendingDashboardPosition;
             pendingNavTarget = null;
+            pendingDashboardPosition = -1;
             root.post(() -> {
                 if ("tv".equals(target)) {
                     activeNavIndex = 1;
                     Intent tv = getPackageManager().getLeanbackLaunchIntentForPackage("ar.tvplayer.tv");
                     if (tv != null) startActivity(tv.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                 } else if ("settings".equals(target)) {
-                    activeNavIndex = 7;
+                    activeNavIndex = 6;
                     if (launcherSettingsButton) startActivityForResult(
                             new Intent(this, LauncherSettingsActivity.class), LAUNCHER_SETTINGS_REQUEST);
                     else open(systemIntent(android.provider.Settings.ACTION_SETTINGS));
-                } else if ("beast".equals(target)) {
-                    activeNavIndex = 5;
-                    startActivity(new Intent(this, BeastActivity.class));
                 } else if ("ha".equals(target)) {
-                    activeNavIndex = 6;
-                    startActivity(new Intent(this, BeastActivity.class)
-                            .putExtra(BeastActivity.EXTRA_URL, getString(R.string.ha_url).trim()));
-                } else if ("shows".equals(target) && mediaRail != null) {
-                    activeNavIndex = 3;
-                    mediaRail.recoverFromApps();
-                    mediaRail.focusShows();
-                } else if (mediaRail != null) {
-                    activeNavIndex = "dashboard".equals(target) ? 0 : 2;
-                    mediaRail.recoverFromApps();
-                    mediaRail.focusMovies();
+                    activeNavIndex = 5;
+                    openHomeAssistant();
+                } else if ("shows".equals(target)) {
+                    selectShows();
+                } else {
+                    if ("dashboard".equals(target)) selectDashboard(dashboardPosition);
+                    else selectMovies();
                 }
             });
         }
@@ -1748,6 +1705,76 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         });
     }
 
+    private void selectDashboard() {
+        selectDashboard(0);
+    }
+
+    private void selectDashboard(int appPosition) {
+        activeNavIndex = 0;
+        if (mediaRail != null) {
+            mediaRail.cancelFocusOnResume();
+            mediaRail.recoverFromApps();
+            mediaRail.focusDashboard();
+            grid.requestLayout();
+        }
+        focusDashboardApps(appPosition);
+    }
+
+    private void focusDashboardApps() {
+        focusDashboardApps(0);
+    }
+
+    private void focusDashboardApps(int position) {
+        dashboardLeftArmed = false;
+        grid.setAlpha(1f);
+        grid.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+        grid.stopScroll();
+        grid.scrollToPosition(0);
+        grid.post(() -> {
+            if (activeNavIndex != 0 || sideNav != null && sideNav.getVisibility() == View.VISIBLE) return;
+            if (adapter.appCount() > 0) focusTile(position);
+            else if (mediaRail != null) mediaRail.focusPlay();
+            else firstTopButton().requestFocus();
+        });
+    }
+
+    @SuppressWarnings("deprecation")
+    private void openAppsFromDashboard(int dashboardPosition) {
+        activeNavIndex = 4;
+        Intent intent = new Intent(this, AppsCatalogActivity.class)
+                .putExtra(AppsCatalogActivity.EXTRA_RETURN_TO_DASHBOARD, true)
+                .putExtra(AppsCatalogActivity.EXTRA_DASHBOARD_APP_POSITION, dashboardPosition);
+        startActivity(intent);
+        if (animations && !reducedMotion) {
+            overridePendingTransition(R.anim.apps_fade_in, R.anim.apps_fade_out);
+        }
+    }
+
+    private void selectMovies() {
+        activeNavIndex = 2;
+        if (mediaRail != null) {
+            mediaRail.recoverFromApps();
+            mediaRail.focusMovies();
+            grid.requestLayout();
+        } else {
+            focusTile(0);
+        }
+    }
+
+    private void selectShows() {
+        activeNavIndex = 3;
+        if (mediaRail != null) {
+            mediaRail.focusShows();
+            grid.requestLayout();
+        }
+    }
+
+    private void openHomeAssistant() {
+        if (!getResources().getBoolean(R.bool.ha_page)
+                || getString(R.string.ha_url).trim().isEmpty()) return;
+        startActivity(new Intent(this, HomeAssistantActivity.class));
+    }
+
     private void buildSideNav() {
         sideNav = new FrameLayout(this);
         sideNav.setVisibility(View.GONE);
@@ -1781,9 +1808,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         addSideNavItem(R.drawable.ic_nav_movies, "Movies", 2);
         addSideNavItem(R.drawable.ic_nav_shows, "Shows", 3);
         addSideNavItem(R.drawable.ic_apps_pill, "Apps", 4);
-        addSideNavItem(R.drawable.ic_nav_beast, "Beast", 5);
-        addSideNavItem(R.drawable.ic_wifi, "Home Assist", 6);
-        addSideNavItem(R.drawable.ic_settings, "Settings", 7);
+        addSideNavItem(R.drawable.ic_wifi, "Home Assist", 5);
+        addSideNavItem(R.drawable.ic_settings, "Settings", 6);
 
         FrameLayout.LayoutParams panelLp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT);
@@ -1878,6 +1904,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         closeSideNav(restoreFocus, null);
     }
 
+    private void dismissSideNavForHome() {
+        if (sideNav == null || sideNav.getVisibility() != View.VISIBLE) return;
+        sideNavPanel.animate().cancel();
+        sideNav.animate().cancel();
+        sideNav.setVisibility(View.GONE);
+        sideNavReturnFocus = null;
+    }
+
     private void closeSideNav(boolean restoreFocus, Runnable after) {
         if (sideNav == null || sideNav.getVisibility() != View.VISIBLE) return;
         sideNavPanel.animate().translationX(-dp(260)).setDuration(180).start();
@@ -1907,12 +1941,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         closeSideNav(false, () -> {
             switch (index) {
                 case 0:
-                    activeNavIndex = 0;
-                    if (mediaRail != null) {
-                        mediaRail.recoverFromApps();
-                        mediaRail.focusMovies();
-                        root.post(() -> mediaRail.focusMovies());
-                    }
+                    selectDashboard();
                     break;
                 case 1:
                     activeNavIndex = 1;
@@ -1920,19 +1949,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     if (tv != null) startActivity(tv.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                     break;
                 case 2:
-                    activeNavIndex = 2;
-                    if (mediaRail != null) {
-                        mediaRail.recoverFromApps();
-                        mediaRail.focusMovies();
-                        root.post(() -> mediaRail.focusMovies());
-                    }
+                    selectMovies();
                     break;
                 case 3:
-                    activeNavIndex = 3;
-                    if (mediaRail != null) {
-                        mediaRail.focusShows();
-                        root.post(() -> mediaRail.focusShows());
-                    }
+                    selectShows();
                     break;
                 case 4:
                     activeNavIndex = 4;
@@ -1940,16 +1960,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     break;
                 case 5:
                     activeNavIndex = 5;
-                    startActivity(new Intent(MainActivity.this, BeastActivity.class));
+                    openHomeAssistant();
                     break;
                 case 6:
                     activeNavIndex = 6;
-                    if (haAlert != null) haAlert.acknowledge();
-                    startActivity(new Intent(MainActivity.this, BeastActivity.class)
-                            .putExtra(BeastActivity.EXTRA_URL, getString(R.string.ha_url).trim()));
-                    break;
-                case 7:
-                    activeNavIndex = 7;
                     if (launcherSettingsButton) startActivityForResult(
                             new Intent(this, LauncherSettingsActivity.class), LAUNCHER_SETTINGS_REQUEST);
                     else open(systemIntent(android.provider.Settings.ACTION_SETTINGS));
@@ -1974,7 +1988,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onPause() {
         super.onPause();
         resumed = false;
-        if (haAlert != null) haAlert.stop();
         if (mediaRail != null) mediaRail.onPaused();   // stop idle auto-rotation while Home is backgrounded
         // No UP reaches a paused Home, so a vendor-key hold it saw go down would still open its app later.
         // Only Home's own share is dropped: a key service that saw the same DOWN keeps its hold.
@@ -2054,35 +2067,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
     }
 
-    /** The house pill red and labelled while a camera sensor is on (HaAlert), a plain house button otherwise. */
-    private void showHaAlert(boolean active) {
-        if (btnHomePill == null) return;
-        if (active) {
-            if (homePillNormal == null) homePillNormal = btnHomePill.getBackground();
-            btnHomePill.setText(R.string.ha_alert_label);
-            // A solid red pill, with a white ring while it has focus. Tinting the pill's own glass came out maroon.
-            float ring = 3f * getResources().getDisplayMetrics().density;
-            android.graphics.drawable.GradientDrawable red = new android.graphics.drawable.GradientDrawable();
-            red.setColor(0xFFE53935);
-            red.setCornerRadius(1000f);
-            android.graphics.drawable.GradientDrawable focused = new android.graphics.drawable.GradientDrawable();
-            focused.setColor(0xFFE53935);
-            focused.setCornerRadius(1000f);
-            focused.setStroke(Math.round(ring), 0xFFFFFFFF);
-            android.graphics.drawable.StateListDrawable states = new android.graphics.drawable.StateListDrawable();
-            states.addState(new int[]{android.R.attr.state_focused}, focused);
-            states.addState(new int[]{}, red);
-            btnHomePill.setBackground(states);
-        } else {
-            btnHomePill.setText("");
-            if (homePillNormal != null) btnHomePill.setBackground(homePillNormal);
-        }
-    }
-
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (haAlert != null) haAlert.release();
         RemoteKeys.release(this);
         cancelHoldOk();
         if (IptvRail != null) IptvRail.release();
@@ -2134,11 +2121,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (sideNav != null && sideNav.getVisibility() == View.VISIBLE
-                && event.getAction() == KeyEvent.ACTION_DOWN
                 && event.getKeyCode() == KeyEvent.KEYCODE_HOME) {
-            activeNavIndex = 0;
-            closeSideNav(true);
-            if (mediaRail != null) mediaRail.focusMovies();
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                dismissSideNavForHome();
+                selectDashboard();
+            }
             return true;
         }
         // Vendor keys (TCL Netflix button, 4062) never reach the key services, only the focused window, so their
@@ -2528,6 +2515,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     @Override
     public void onTileFocused(int position, View card) {
+        dashboardLeftArmed = false;
         lastFocused = position;
         lastFocusedKey = adapter.keyAt(position);
         // Focus restored before the first layout (cold start): the tile has no size yet, and the glass
@@ -3261,6 +3249,38 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     public boolean onTileVerticalKey(int position, int keyCode) {
         int count = adapter.appCount();
         int target;
+        boolean dashboardApps = activeNavIndex == 0 && mediaRail != null
+                && mediaRail.isDashboardActive() && position < COLUMNS;
+        if (dashboardApps) {
+            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                if (mediaRail.hasItems()) {
+                    dashboardLeftArmed = false;
+                    mediaRail.focusPlay();
+                    grid.playSoundEffect(SoundEffectConstants.NAVIGATION_UP);
+                    return true;
+                }
+                dashboardLeftArmed = false;
+                return false;
+            }
+            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                openAppsFromDashboard(position);
+                return true;
+            }
+            int priorityCount = Math.min(count, adapter.dockFilled());
+            boolean towardDrawer = rtlAppGrid
+                    ? keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && position == priorityCount - 1
+                    : keyCode == KeyEvent.KEYCODE_DPAD_LEFT && position == 0;
+            if (towardDrawer) {
+                if (dashboardLeftArmed) {
+                    dashboardLeftArmed = false;
+                    openSideNav();
+                } else {
+                    dashboardLeftArmed = true;
+                }
+                return true;
+            }
+            dashboardLeftArmed = false;
+        }
         if (singleRow) {
             // One row: Up leaves for the top bar, Down has nowhere to go, and Left/Right walk the whole row,
             // stopping at its two ends (the default focus search scrolls the row to the next tile).

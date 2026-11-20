@@ -41,6 +41,7 @@
     <string name="media_rail_added_yesterday" translatable="false">added yesterday</string>
     <string name="media_rail_added_days" translatable="false">added %1$d days ago</string>
     <string name="media_rail_no_player" translatable="false">No video player installed for this item</string>
+    <string name="media_rail_play" translatable="false">Play</string>
 
     <!-- Rotating past the last title puts the showcase into a "Show more" state (no strip tile); OK opens the
          full browse view (Tier 2). media_rail_show_more_sub is the line under it in the showcase. -->

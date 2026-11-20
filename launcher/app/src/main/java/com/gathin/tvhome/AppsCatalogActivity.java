@@ -24,6 +24,8 @@ import java.util.List;
 
 public class AppsCatalogActivity extends Activity implements AppAdapter.TileListener {
     private static final int COLUMNS = 5;
+    static final String EXTRA_RETURN_TO_DASHBOARD = "return_to_dashboard";
+    static final String EXTRA_DASHBOARD_APP_POSITION = "dashboard_app_position";
     private FrameLayout root;
     private RecyclerView grid;
     private AppAdapter adapter;
@@ -33,6 +35,9 @@ public class AppsCatalogActivity extends Activity implements AppAdapter.TileList
     private int navIndex;
     private boolean edgeLeftArmed;
     private View sideNavReturnFocus;
+    private boolean returnToDashboardOnExit;
+    private int dashboardAppPosition;
+    private boolean transitions;
 
     @Override
     protected void attachBaseContext(android.content.Context base) {
@@ -43,6 +48,9 @@ public class AppsCatalogActivity extends Activity implements AppAdapter.TileList
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         Config cfg = Config.load(this);
+        returnToDashboardOnExit = getIntent().getBooleanExtra(EXTRA_RETURN_TO_DASHBOARD, false);
+        dashboardAppPosition = Math.max(0, getIntent().getIntExtra(EXTRA_DASHBOARD_APP_POSITION, 0));
+        transitions = cfg.animations && !cfg.reducedMotion;
         float density = getResources().getDisplayMetrics().density;
         root = new FrameLayout(this);
         root.setBackgroundColor(0xFF090B10);
@@ -57,7 +65,7 @@ public class AppsCatalogActivity extends Activity implements AppAdapter.TileList
         title.setTypeface(UiFont.get(this, R.string.font_light));
         page.addView(title);
         TextView hint = new TextView(this);
-        hint.setText("Back or Left to navigate");
+        hint.setText(returnToDashboardOnExit ? "Up or Back to Dashboard" : "Back or Left to navigate");
         hint.setTextColor(0x88FFFFFF);
         hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         hint.setTypeface(UiFont.get(this, R.string.font_regular));
@@ -96,6 +104,10 @@ public class AppsCatalogActivity extends Activity implements AppAdapter.TileList
 
     @Override
     public boolean onTileVerticalKey(int position, int keyCode) {
+        if (returnToDashboardOnExit && keyCode == KeyEvent.KEYCODE_DPAD_UP && position < COLUMNS) {
+            returnToDashboard();
+            return true;
+        }
         if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && position % COLUMNS == 0) {
             if (edgeLeftArmed) returnToMainSideNav();
             else edgeLeftArmed = true;
@@ -151,9 +163,8 @@ public class AppsCatalogActivity extends Activity implements AppAdapter.TileList
         addNavItem(R.drawable.ic_nav_movies, "Movies", 2);
         addNavItem(R.drawable.ic_nav_shows, "Shows", 3);
         addNavItem(R.drawable.ic_apps_pill, "Apps", 4);
-        addNavItem(R.drawable.ic_nav_beast, "Beast", 5);
-        addNavItem(R.drawable.ic_wifi, "Home Assist", 6);
-        addNavItem(R.drawable.ic_settings, "Settings", 7);
+        addNavItem(R.drawable.ic_wifi, "Home Assist", 5);
+        addNavItem(R.drawable.ic_settings, "Settings", 6);
         sideNav.addView(sideNavPanel, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START));
         root.addView(sideNav, new FrameLayout.LayoutParams(
@@ -251,8 +262,8 @@ public class AppsCatalogActivity extends Activity implements AppAdapter.TileList
                 .addCategory(Intent.CATEGORY_HOME)
                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.putExtra(index == 1 ? "open_tv" : index == 2 ? "focus_movies"
-                : index == 3 ? "focus_shows" : index == 5 ? "open_beast"
-                : index == 6 ? "open_ha" : index == 7 ? "open_settings" : "open_dashboard", true);
+                : index == 3 ? "focus_shows" : index == 5 ? "open_ha"
+                : index == 6 ? "open_settings" : "open_dashboard", true);
         startActivity(intent);
         finish();
     }
@@ -268,6 +279,19 @@ public class AppsCatalogActivity extends Activity implements AppAdapter.TileList
         finish();
     }
 
+    @SuppressWarnings("deprecation")
+    private void returnToDashboard() {
+        sideNav.setVisibility(View.GONE);
+        Intent intent = new Intent(this, MainActivity.class)
+                .addCategory(Intent.CATEGORY_HOME)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .putExtra("open_dashboard", true)
+                .putExtra(EXTRA_DASHBOARD_APP_POSITION, dashboardAppPosition);
+        startActivity(intent);
+        finish();
+        if (transitions) overridePendingTransition(R.anim.apps_fade_in, R.anim.apps_fade_out);
+    }
+
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (sideNav != null && sideNav.getVisibility() == View.VISIBLE
@@ -279,7 +303,8 @@ public class AppsCatalogActivity extends Activity implements AppAdapter.TileList
         if (sideNav != null && sideNav.getVisibility() == View.VISIBLE) return super.dispatchKeyEvent(event);
         if (event.getAction() == KeyEvent.ACTION_DOWN
                 && (event.getKeyCode() == KeyEvent.KEYCODE_BACK || event.getKeyCode() == KeyEvent.KEYCODE_ESCAPE)) {
-            returnToMainSideNav();
+            if (returnToDashboardOnExit) returnToDashboard();
+            else returnToMainSideNav();
             return true;
         }
         return super.dispatchKeyEvent(event);

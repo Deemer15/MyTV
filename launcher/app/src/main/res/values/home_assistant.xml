@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_assistant_unreachable" translatable="false">Can\'t reach Home Assistant at %1$s. Is it online?</string>
+</resources>
