@@ -989,6 +989,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (singleRow && !cfg.alwaysShowNames) want += (int) (29 * density);
             if (grid.getPaddingTop() != want) {
                 grid.setPadding(grid.getPaddingLeft(), want, grid.getPaddingRight(), grid.getPaddingBottom());
+                // The layout request setPadding makes from inside this pass is dropped, so a padding change (the rail
+                // band shrinking from Movies back to Dashboard) left the tiles laid out for the old padding: off screen.
+                if (!singleRow) grid.post(grid::requestLayout);
                 // A vertical grid parks the dock on the new padding line by scrolling (onTileFocused); a sideways
                 // row cannot scroll vertically, and the layout request made from inside this layout pass is
                 // dropped, so lay the row out again on the next frame. The glass and the title were placed for the
@@ -1224,9 +1227,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 }
 
                 @Override public void onRailFocused() {
-                    grid.setAlpha(0f);
-                    grid.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
-                    grid.stopScroll();
+                    if (activeNavIndex == 0) return;   // a stale card focus must not hide Dashboard's apps
+                    hideGridForRail();
                     hideHero();   // the hero shelf is GONE on this layout (set above); harmless backstop
                 }
 
@@ -1730,12 +1732,32 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         grid.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
         grid.stopScroll();
         grid.scrollToPosition(0);
-        grid.post(() -> {
-            if (activeNavIndex != 0 || sideNav != null && sideNav.getVisibility() == View.VISIBLE) return;
-            if (adapter.appCount() > 0) focusTile(position);
-            else if (mediaRail != null) mediaRail.focusPlay();
-            else firstTopButton().requestFocus();
+        grid.requestLayout();
+        // Wait for the tile to be laid out with the Dashboard padding: focusing earlier dropped focus into the header.
+        grid.postOnAnimation(new Runnable() {
+            int tries;
+            @Override public void run() {
+                if (activeNavIndex != 0 || sideNav != null && sideNav.getVisibility() == View.VISIBLE) return;
+                if (adapter.appCount() == 0) {
+                    if (mediaRail != null) mediaRail.focusPlay();
+                    else firstTopButton().requestFocus();
+                    return;
+                }
+                int pos = adapter.focusablePosition(Math.max(0, Math.min(position, adapter.appCount() - 1)));
+                if (grid.findViewHolderForAdapterPosition(pos) == null && tries++ < 60) {
+                    grid.requestLayout();
+                    grid.postOnAnimation(this);
+                    return;
+                }
+                focusTile(position);
+            }
         });
+    }
+
+    private void hideGridForRail() {
+        grid.setAlpha(0f);
+        grid.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+        grid.stopScroll();
     }
 
     @SuppressWarnings("deprecation")
@@ -1753,6 +1775,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private void selectMovies() {
         activeNavIndex = 2;
         if (mediaRail != null) {
+            hideGridForRail();
             mediaRail.recoverFromApps();
             mediaRail.focusMovies();
             grid.requestLayout();
@@ -1764,6 +1787,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private void selectShows() {
         activeNavIndex = 3;
         if (mediaRail != null) {
+            hideGridForRail();
             mediaRail.focusShows();
             grid.requestLayout();
         }

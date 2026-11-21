@@ -2087,13 +2087,17 @@ final class MediaRail {
         target.postOnAnimation(new Runnable() {
             int tries;
             @Override public void run() {
+                Section wanted = target == row ? Section.MOVIES : Section.SHOWS;
+                if (released || section != wanted) return;
                 RecyclerView.ViewHolder holder = target.findViewHolderForAdapterPosition(0);
                 if (holder != null && holder.itemView.requestFocus()) {
-                    if (target == row && section == Section.MOVIES) armMovieFocusTimeout();
+                    if (target == row) armMovieFocusTimeout();
                     return;
                 }
-                if (tries++ < 12 && target.getAdapter() != null
+                // A slow first layout (bigger rail, slower TV) took longer than a few frames and left nothing focused.
+                if (tries++ < 60 && target.getAdapter() != null
                         && target.getAdapter().getItemCount() > 0) {
+                    target.requestLayout();
                     target.postOnAnimation(this);
                 }
             }
