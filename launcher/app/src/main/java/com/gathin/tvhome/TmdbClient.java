@@ -105,16 +105,16 @@ final class TmdbClient {
     }
 
     /**
-     * Looks up one movie by title (optionally constrained to a release year) and returns its wide backdrop URL, or
-     * null when there is no api key, no match, or the match has no backdrop. Used to enrich a Media rail item whose
-     * provider gave only a poster, so the wide showcase shows a 16:9 still instead of a cropped poster. Blocks; run
-     * off the main thread. The year, when > 0, is passed to TMDB to disambiguate remakes and same-named series.
+     * Looks up one movie or show by title and returns its wide backdrop URL, or null when there is no API key,
+     * match, or backdrop. The TMDB search type follows the Media rail item, so a series cannot resolve to a
+     * same-named movie.
      */
-    String searchBackdrop(String title, int year) throws IOException {
+    String searchBackdrop(String title, int year, boolean series) throws IOException {
         if (apiKey.isEmpty() || title == null || title.trim().isEmpty()) return null;
-        String url = "https://api.themoviedb.org/3/search/movie?api_key=" + Uri.encode(apiKey)
+        String kind = series ? "tv" : "movie";
+        String url = "https://api.themoviedb.org/3/search/" + kind + "?api_key=" + Uri.encode(apiKey)
                 + "&query=" + Uri.encode(title.trim()) + "&include_adult=false";
-        if (year > 0) url += "&year=" + year;
+        if (year > 0) url += (series ? "&first_air_date_year=" : "&year=") + year;
         try (Reply reply = open(url)) {
             JsonReader r = reply.json;
             r.beginObject();

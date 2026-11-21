@@ -20,8 +20,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.text.TextUtils;
-import android.text.Spannable;
-import android.text.SpannableStringBuilder;
 import android.util.AtomicFile;
 import android.util.Log;
 import android.util.LruCache;
@@ -188,6 +186,8 @@ final class MediaRail {
     private final FrameLayout showcase;      // the big left box: the ONE focusable/clickable element in the rail
     private final ImageView showcaseImage;   // the big left showcase box's art
     private final TextView showcaseRating;
+    private final TextView showcaseTmdb;
+    private final TextView showcaseScore;
     private final TextView featuredTitle;    // the showcase title
     private final TextView featuredSub;       // detail line: "year · source · added" or "N new episodes"
     private final TextView featuredOverview;
@@ -348,8 +348,10 @@ final class MediaRail {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         showcaseImage.setVisibility(View.GONE);
 
-        showcaseRating = ratingBadge(context);
-        showcaseRating.setVisibility(View.GONE);
+        showcaseRating = metadataBadge(context, false);
+        showcaseTmdb = metadataBadge(context, true);
+        showcaseTmdb.setText("TMDb");
+        showcaseScore = metadataScore(context);
 
         LinearLayout showText = new LinearLayout(context);
         showText.setOrientation(LinearLayout.VERTICAL);
@@ -380,6 +382,21 @@ final class MediaRail {
         featuredSub.setMaxWidth(dp(470));
         detailHeader.addView(featuredSub, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout.LayoutParams ratingLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        ratingLp.setMarginStart(dp(8));
+        detailHeader.addView(showcaseRating, ratingLp);
+
+        LinearLayout.LayoutParams tmdbLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tmdbLp.setMarginStart(dp(8));
+        detailHeader.addView(showcaseTmdb, tmdbLp);
+
+        LinearLayout.LayoutParams scoreLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        scoreLp.setMarginStart(dp(4));
+        detailHeader.addView(showcaseScore, scoreLp);
 
         playButton = new TextView(context);
         playButton.setText(R.string.media_rail_play);
@@ -1044,7 +1061,7 @@ final class MediaRail {
     private void bindShowMore() {
         heroItem = null;
         playButton.setVisibility(View.GONE);
-        showcaseRating.setVisibility(View.GONE);
+        clearFeaturedMetadata();
         if (!spotlightItems.isEmpty()) {
             loadImage(showcaseImage, wideArt(spotlightItems.get(0)));
             showcaseImage.setAlpha(0.35f);         // dim the art so the "Show more" label clearly leads
@@ -1554,7 +1571,7 @@ final class MediaRail {
     private void maybeFetchBackdrop(MediaItem it) {
         if (tmdb == null || it == null) return;
         if (it.backdrop != null && !it.backdrop.isEmpty()) return;   // already have one
-        String key = it.title + "|" + it.year;
+        String key = metadataKey(it);
         String cached = backdropCache.get(key);
         if (cached != null) {                 // "" means "looked up, none found" — don't re-query
             if (!cached.isEmpty()) {
@@ -1568,12 +1585,13 @@ final class MediaRail {
         }
         final String title = it.title;
         final int year = it.year;
+        final boolean series = it.isSeries;
         // Use worker (not imagePool): a slow TMDB call must not occupy an image-decode thread. worker is otherwise
         // idle except during refresh, and these lookups are infrequent (once per item the user lands on, cached).
         worker.execute(() -> {
             String bd;
             try {
-                bd = tmdb.searchBackdrop(title, year);
+                bd = tmdb.searchBackdrop(title, year, series);
             } catch (Exception e) {
                 return;   // leave it uncached: a transient failure can be retried next time the item is shown
             }
@@ -1601,7 +1619,7 @@ final class MediaRail {
     private void bindEmptyFilter() {
         heroItem = null;
         playButton.setVisibility(View.GONE);
-        showcaseRating.setVisibility(View.GONE);
+        clearFeaturedMetadata();
         showcaseImage.setAlpha(1f);
         showcaseImage.setImageDrawable(null);
         showcaseImage.setTag(null);
@@ -1621,7 +1639,7 @@ final class MediaRail {
             featuredSub.setText("");
             showcaseImage.setImageDrawable(null);
             showcaseImage.setTag(null);
-            showcaseRating.setVisibility(View.GONE);
+            clearFeaturedMetadata();
             playButton.setVisibility(View.GONE);
             return;
         }
@@ -1631,14 +1649,13 @@ final class MediaRail {
         playButton.setVisibility(View.VISIBLE);
         playButton.setContentDescription(context.getString(R.string.media_rail_play) + " " + it.spotlightTitle());
         TmdbClient.Info info = metadataCache.get(metadataKey(it));
-        showcaseRating.setVisibility(View.GONE);
         featuredSub.setText(detailLine(it, info));
+        bindFeaturedMetadata(info);
         featuredOverview.setText(info == null ? "" : info.overview);
         maybeFetchMetadata(it);
     }
 
-    /** Detail line under the title: "year" or "N new episodes", then the age rating when known, the source and when
-     *  it was added. */
+    /** Detail line under the title: year/runtime or episode count, then source and added date. */
     private CharSequence detailLine(MediaItem it, TmdbClient.Info info) {
         List<String> parts = new ArrayList<>();
         if (it.isSeries) {
@@ -1654,30 +1671,7 @@ final class MediaRail {
         parts.add(it.source == MediaItem.Source.DOWNLOAD ? badgeDownload : badgeStream);
         String added = addedText(it.added);
         if (!added.isEmpty()) parts.add(added);
-        SpannableStringBuilder line = new SpannableStringBuilder();
-        for (int i = 0; i < parts.size(); i++) {
-            if (i > 0) line.append("  \u00B7  ");
-            line.append(parts.get(i));
-        }
-        if (info != null) {
-            String certification = TmdbClient.ratingChip(info.certification);
-            if (!certification.isEmpty()) {
-                if (line.length() > 0) line.append("  ");
-                int start = line.length();
-                line.append(certification);
-                line.setSpan(new RoundedBadgeSpan(context, false), start, line.length(),
-                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-            }
-            if (info.rating > 0) {
-                if (line.length() > 0) line.append("  ");
-                int start = line.length();
-                line.append("TMDb");
-                line.setSpan(new RoundedBadgeSpan(context, true), start, line.length(),
-                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-                line.append(" ").append(String.format(java.util.Locale.US, "%.1f", info.rating));
-            }
-        }
-        return line;
+        return String.join("  \u00B7  ", parts);
     }
 
     private static String metadataKey(MediaItem it) {
@@ -1711,11 +1705,18 @@ final class MediaRail {
                 if (released) return;
                 metadataCache.put(key, result);
                 for (MediaItem item : allItems) {
-                    if (metadataKey(item).equals(key)) item.certification = result.certification;
+                    if (metadataKey(item).equals(key)) {
+                        item.certification = result.certification;
+                        if (!result.backdrop.isEmpty()) item.backdrop = result.backdrop;
+                    }
                 }
                 if (isSelected(it)) {
-                    showcaseRating.setVisibility(View.GONE);
+                    if (!result.backdrop.isEmpty()) {
+                        loadImage(showcaseImage, result.backdrop);
+                        host.onItemFocused(it);
+                    }
                     featuredSub.setText(detailLine(it, result));
+                    bindFeaturedMetadata(result);
                     featuredOverview.setText(result.overview);
                 }
                 adapter.notifyDataSetChanged();
@@ -1767,37 +1768,55 @@ final class MediaRail {
         return Math.round(v * density);
     }
 
-    private static TextView ratingBadge(Context context) {
-        TextView rating = new TextView(context);
-        rating.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9);
-        rating.setTextColor(Color.WHITE);
-        rating.setTypeface(UiFont.get(context, R.string.font_medium));
-        rating.setGravity(Gravity.CENTER);
-        rating.setIncludeFontPadding(false);
-        rating.setSingleLine(true);
-        rating.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+    private static TextView metadataBadge(Context context, boolean yellow) {
+        TextView badge = new TextView(context);
+        badge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9);
+        badge.setTextColor(Color.BLACK);
+        badge.setTypeface(UiFont.get(context, R.string.font_medium));
+        badge.setGravity(Gravity.CENTER);
+        badge.setIncludeFontPadding(false);
+        badge.setSingleLine(true);
+        badge.setPadding(dpValue(context, 4), dpValue(context, 1),
+                dpValue(context, 4), dpValue(context, 1));
+        badge.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(dpValue(context, 4));
-        bg.setColor(0xCC000000);
-        bg.setStroke(dpValue(context, 1), 0xCCFFFFFF);
-        rating.setBackground(bg);
-        rating.setVisibility(View.GONE);
-        return rating;
+        bg.setCornerRadius(dpValue(context, 3));
+        bg.setColor(yellow ? 0xFFF5C518 : Color.WHITE);
+        badge.setBackground(bg);
+        badge.setVisibility(View.GONE);
+        return badge;
+    }
+
+    private static TextView metadataScore(Context context) {
+        TextView score = new TextView(context);
+        score.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        score.setTextColor(0xDDFFFFFF);
+        score.setTypeface(UiFont.get(context, R.string.font_regular));
+        score.setIncludeFontPadding(false);
+        score.setSingleLine(true);
+        score.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        score.setVisibility(View.GONE);
+        return score;
+    }
+
+    private void bindFeaturedMetadata(TmdbClient.Info info) {
+        String rating = info == null ? "" : TmdbClient.ratingChip(info.certification);
+        showcaseRating.setText(rating);
+        showcaseRating.setVisibility(rating.isEmpty() ? View.GONE : View.VISIBLE);
+        boolean scored = info != null && info.rating > 0;
+        showcaseTmdb.setVisibility(scored ? View.VISIBLE : View.GONE);
+        showcaseScore.setText(scored ? String.format(java.util.Locale.US, "%.1f", info.rating) : "");
+        showcaseScore.setVisibility(scored ? View.VISIBLE : View.GONE);
+    }
+
+    private void clearFeaturedMetadata() {
+        showcaseRating.setVisibility(View.GONE);
+        showcaseTmdb.setVisibility(View.GONE);
+        showcaseScore.setVisibility(View.GONE);
     }
 
     private static int dpValue(Context context, float value) {
         return Math.round(value * context.getResources().getDisplayMetrics().density);
-    }
-
-    private static void bindRating(TextView view, MediaItem item) {
-        bindRating(view, item, null);
-    }
-
-    private static void bindRating(TextView view, MediaItem item, TmdbClient.Info info) {
-        String rating = info == null ? item.certification : info.certification;
-        rating = TmdbClient.ratingChip(rating);
-        view.setText(rating);
-        view.setVisibility(rating.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     // ---- cards -----------------------------------------------------------------------------------

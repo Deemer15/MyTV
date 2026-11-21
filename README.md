@@ -41,10 +41,15 @@ the selection back.
 
 ### Shows
 
-![Shows: an episode guide with large stills, episode titles and a season picker](docs/screenshots/episodes.jpg)
+![Shows: the selected series with its original wide backdrop and poster rail](docs/screenshots/shows.jpg)
 
 Shows lists your downloaded series, newest episode first, so a show with a new episode comes back to the front.
-Press OK on a show to open its episode guide. Each episode has its own still, title, overview and TMDb score.
+The selected series uses its full-resolution TMDB backdrop, not a stretched poster. Press OK on a show to open
+its episode guide.
+
+![Episode guide: large episode stills with titles beneath](docs/screenshots/episodes.jpg)
+
+Each episode has its own still, title, overview and TMDb score.
 
 ### Apps
 

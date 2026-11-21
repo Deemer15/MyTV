@@ -28,6 +28,7 @@ FRONT_PAGE_IMAGES = [
     "docs/screenshots/home.jpg",
     "docs/screenshots/drawer.jpg",
     "docs/screenshots/movies.jpg",
+    "docs/screenshots/shows.jpg",
     "docs/screenshots/episodes.jpg",
     "docs/screenshots/apps.jpg",
 ]
