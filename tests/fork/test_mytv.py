@@ -26,9 +26,10 @@ BUILT_APK = ROOT / "launcher" / "app" / "build" / "outputs" / "apk" / "release" 
 # Images the front page shows, relative to the repo root.
 FRONT_PAGE_IMAGES = [
     "docs/screenshots/home.jpg",
-    "docs/screenshots/explore.jpg",
-    "docs/screenshots/explore-shows.jpg",
+    "docs/screenshots/drawer.jpg",
+    "docs/screenshots/movies.jpg",
     "docs/screenshots/episodes.jpg",
+    "docs/screenshots/apps.jpg",
 ]
 
 

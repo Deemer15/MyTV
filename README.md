@@ -1,129 +1,131 @@
 # MyTV
 
-My three home TVs, running a customised fork of [Clean Your TV](https://github.com/Gathin23/cleanyourtv): the
-stock Google TV home screen is replaced by a clean, Apple TV style launcher (`com.gathin.tvhome`), and the
-tracking and unused system services are disabled (never uninstalled). This is a private, personal backup;
-nothing here is meant for upstream. The original project's README is kept for reference at
-[`README.upstream.md`](README.upstream.md).
+A cinematic, Apple TV–style home screen for the Google TV devices in my house. It is built on a private fork
+of [Clean Your TV](https://github.com/Gathin23/cleanyourtv). The stock Google TV home and its ads are replaced
+by a fast, quiet launcher (`com.gathin.tvhome`). The tracking and unused system services are disabled, never
+uninstalled, so every change can be undone.
 
-![The MyTV home screen](docs/screenshots/home.jpg)
+![Dashboard: a full-screen movie backdrop, title, rating, Play button and the favorite-apps dock](docs/screenshots/home.jpg)
 
-## What I added on top of upstream
+## Highlights
 
-- **Cinematic Dashboard**: a full-screen TMDB backdrop with title, overview, year, runtime, US age rating and a
-  yellow `TMDb` score badge. A focusable **Play** pill opens the presented title, while the only row below the
-  spotlight is the configured priority-app dock.
-- **Shows**: a separate rail and show-detail screen with the show's artwork, overview, seasons and episode cards.
-  Selecting Shows focuses its first card and pauses the movie spotlight.
-- **Auto-rotating movie spotlight**: Dashboard keeps the priority-app focus in place while the spotlight
-  cross-fades every 10 seconds. If the Play pill is focused instead, focus returns to the first priority app after
-  10 seconds. Movies is a separate poster rail with its own 10-second focus timeout.
-- **Drawer navigation**: Back or the rail's left edge opens Dashboard, TV, Movies, Shows, Apps, Home Assist and
-  Settings. The drawer highlights the current section and physical Home always returns to Dashboard.
-- **Apps page**: a standalone catalogue using the launcher's original TV banner tiles, app order, focus scale and
-  animation. Pressing Down from the Dashboard priority dock fades into this same catalogue; Up from its first row
-  or Back restores the priority-app focus left behind. The drawer opens the same catalogue and keeps its existing
-  drawer return behavior.
-- **Home Assist**: opens from the drawer through the guarded WebView.
-- **Series freshness**: a show moves up using its newest downloaded episode file's modification time, rather
-  than the older date at which the series was first added.
-- **Weather widget** in place of the date next to the clock: current temperature, a condition icon and today's
-  high and low, from the TV's own location.
-- **Per-room setups** under [`mytv/`](mytv/README.md): one config, debloat list and set of scripts per TV.
+- **Dashboard first.** Every press of Home opens a full-screen backdrop of the newest movie, with its title,
+  year, runtime, age rating and TMDb score. Your favorite apps sit in a dock underneath.
+- **Movies and Shows** each have their own poster rail. Shows opens a full episode guide with stills and titles.
+- **One side drawer** handles all navigation: Dashboard, TV, Movies, Shows, Apps, Home Assist and Settings.
+- **Every app is one press away.** Press Down from the dock and the screen fades into the full app catalog.
+- **Weather and your next calendar event** sit next to the clock.
+- **Light and private.** There is no telemetry and no background polling, and the release APK is under 700 KB.
 
-### Dashboard, Shows and the Apps page
+## A quick tour
 
-![Movies: a full-screen backdrop with title, rating, overview and a poster rail](docs/screenshots/explore.jpg)
+### Dashboard
 
-The side drawer replaces the old Home / Explore tabs:
+The spotlight changes to a new movie every 10 seconds, while focus stays on your apps. Press **Up** to reach
+**Play**, which starts the title on screen. Leave Play focused for 10 seconds and focus returns to the first app.
 
-- **Dashboard** rotates the newest Local and IPTV movie spotlight over the full-screen backdrop while the
-  configured priority apps stay in the bottom dock. App focus does not pause or affect the spotlight. Up from the
-  apps focuses the **Play** pill, which opens the current title; if Play stays focused for 10 seconds, focus returns
-  to the first priority app. Down from an app fades into the full Apps catalogue. Up from its first row or Back
-  restores the priority app where the transition began.
-- **Movies** is separate from Dashboard and keeps the Recently Added poster rail. It enters with the first card
-  focused. After 10 seconds of inactivity, focus clears and the spotlight resumes rotating; the next D-pad key
-  restores movie focus.
-- **Shows** uses downloaded series and focuses the first card after the rail switch. It pauses the movie rotation.
-  OK opens the show's season/episode page; Back returns to the previous screen.
-- **Apps** opens a separate catalogue rendered with the original launcher `AppAdapter` tiles and banner artwork.
-  Its ordering is the launcher's configured ordering, not a new app sort.
-- **Home Assist** opens the configured Home Assistant dashboard.
-- The full-screen backdrop, episode title, show title, year, runtime, age rating, `TMDb` score and overview follow
-  the focused item.
-- **Age ratings** come from TMDB's US listing and appear next to the year, both here and on the Home showcase.
-  Movies show their certificate (PG-13, R and so on) and series show their TV rating (TV-14, TV-MA and so on). A title with no US release on TMDB shows no age rating, so an unreleased film stays
-  blank until TMDB lists one.
+### The side drawer
 
-![Shows: The Amazing Race backdrop with a focused series rail](docs/screenshots/explore-shows.jpg)
+![The side drawer: Dashboard, TV, Movies, Shows, Apps, Home Assist and Settings](docs/screenshots/drawer.jpg)
 
-The same banner tiles appear in the full Apps catalogue:
+Press **Back**, or **Left** from the edge of a row, to slide the drawer open. It highlights the section you are
+in. Pressing **Home** closes it and goes back to the Dashboard.
 
-![All Apps catalogue reached with Down from the Dashboard priority row](docs/screenshots/apps.jpg)
+### Movies
 
-Focusing a show opens its episodes in order as wide stills, each with its own TMDB name and overview:
+![Movies: a Recently Added poster rail under the selected movie's backdrop and details](docs/screenshots/movies.jpg)
 
-![Explore episodes view: The Amazing Race S39 with a rail of episode stills and titles](docs/screenshots/episodes.jpg)
+Movies opens with the first poster selected. The backdrop and details follow whichever poster you are on. After
+10 seconds without a key press, the selection clears and the spotlight starts changing again. Any arrow key brings
+the selection back.
+
+### Shows
+
+![Shows: an episode guide with large stills, episode titles and a season picker](docs/screenshots/episodes.jpg)
+
+Shows lists your downloaded series, newest episode first, so a show with a new episode comes back to the front.
+Press OK on a show to open its episode guide. Each episode has its own still, title, overview and TMDb score.
+
+### Apps
+
+![The full app catalog, reached by pressing Down from the Dashboard dock](docs/screenshots/apps.jpg)
+
+Press **Down** from the dock and the screen fades into the full catalog. It uses the same tiles and order as
+the dock. Press **Up** from the top row, or **Back**, to return to the exact app you left.
+
+### Metadata
+
+Backdrops, overviews, US age ratings (PG-13, R, TV-14 and so on) and the yellow `TMDb` score come from
+[TMDB](https://www.themoviedb.org/). A title with no US release on TMDB shows no rating.
+
+## Remote cheat sheet
+
+| Press | On | Does |
+|-------|----|------|
+| Home | Anywhere | Back to the Dashboard, with the first app selected |
+| Back, or Left at the edge | Dashboard, Movies, Shows | Opens the side drawer |
+| Up | Dashboard dock | Selects **Play** for the spotlight movie |
+| Down | Dashboard dock | Fades into the full app catalog |
+| Up or Back | Top row of the app catalog | Returns to the Dashboard app you came from |
+| OK | A movie or show | Plays the movie, or opens the show's episode guide |
 
 ## My TVs
 
-| Room | Device | Features |
-|------|--------|------|
-| Office | Hisense SmartTV 4K (lushan), Google TV 12 | Dashboard, Shows detail, Apps catalogue, drawer, Weather widget |
-| LivingRoom TV | onn. Streaming Device 4K pro (SNA), Google TV 14 | Same launcher features, Weather widget |
-| Master Bedroom | onn 4K Pro (jarvis2), Google TV 14 | Same launcher features, Weather widget |
+| Room | Device | Notes |
+|------|--------|-------|
+| Office | Hisense 4K Smart TV (lushan), Google TV 12 | Built-in TV, so HDMI inputs and a Live TV app |
+| Living Room | onn 4K Pro streaming box, Google TV 14 | Streaming box only |
+| Master Bedroom | onn 4K Pro (jarvis2), Google TV 14 | Streaming box only. A sixth column of apps |
 
-Addresses, what was disabled and why, remote-button notes and the restore commands are in
-[`mytv/README.md`](mytv/README.md). Each room's folder has its own `config.xml`, `debloat.txt` and the batches
-as applied.
+All three run the same launcher, built with each room's own `config.xml`. What was disabled and why, the
+remote-button notes and the restore commands for each room are in [`mytv/README.md`](mytv/README.md).
 
 ## Common tasks
 
-Run from the repo root in PowerShell. The TV needs network ADB enabled. If it only offers Wireless debugging,
-pair with platform-tools `adb` and use the connection endpoint shown in Developer options; see the
-[native ADB guide](tools/native-adb.md).
+Run these from the repo root in PowerShell. The TV needs network ADB turned on. If it only offers Wireless
+debugging, pair with platform-tools `adb` first; see the [native ADB guide](tools/native-adb.md).
 
 | To | Run |
 |----|-----|
 | Build the launcher for a room and install it | `pwsh mytv\build-and-install.ps1 -Room 'LivingRoom TV'` |
-| Snapshot a TV before changing it | `pwsh mytv\backup.ps1 -Room 'LivingRoom TV'` |
+| Back up a TV before changing it | `pwsh mytv\backup.ps1 -Room 'LivingRoom TV'` |
 | Undo a room's debloat and give Home back | `pwsh mytv\restore.ps1 -Room 'LivingRoom TV'` |
 | Disable a batch of packages | `pwsh tools\disable.ps1 -TvHost <ip>:5555 'mytv\<room>\batch1.txt'` |
 | Push the Christmas theme | `pwsh tools\theme.ps1 -TvHost <ip>:5555 themes\christmas` |
 | Take a screenshot | `$env:TV_HOST='<ip>:5555'; .\.venv\Scripts\python.exe tools\tv.py --screenshot shots\x.png` |
 
-Edit `mytv\<room>\config.xml`, not `launcher\app\src\main\res\values\config.xml`: the room's file is copied over
-the launcher's on every build, so the launcher's copy always shows the last room built.
+Edit `mytv\<room>\config.xml`, not `launcher\app\src\main\res\values\config.xml`. Every build copies the room's
+file over the launcher's, so the launcher's copy always matches the last room built.
 
-## Setting up a new TV like the office
+## Setting up a new TV
 
 1. Add the room to `mytv\rooms.ps1`, and to the `ValidateSet` in `build-and-install.ps1`, `backup.ps1` and
    `restore.ps1`.
-2. Back it up first with `backup.ps1`. Check `dumpsys wifi | grep -o 'cname=[^ ]*'` before disabling the setup
-   wizard: if it owns the saved Wi-Fi network, disabling it drops the TV off Wi-Fi.
-3. Copy the office `config.xml` into the new room's folder and change what the hardware needs (a streaming box
-   has no Live TV app or HDMI inputs). The main navigation is in the side drawer. Keep `weather_widget`,
-   `explore_page` and `media_rail` on.
-4. Disable the debloat batches one at a time with a screenshot between them, setup wizard last.
-5. Install mpv and Just Player if the room uses the rail, then run `build-and-install.ps1`.
+2. Back the TV up with `backup.ps1`. Before disabling the setup wizard, check
+   `dumpsys wifi | grep -o 'cname=[^ ]*'`. If the wizard owns the saved Wi-Fi network, disabling it takes the TV
+   off Wi-Fi.
+3. Copy the Office `config.xml` into the new room's folder and change what the hardware needs. A streaming box
+   has no Live TV app or HDMI inputs. Keep `media_rail`, `explore_page` and `weather_widget` on.
+4. Disable the debloat batches one at a time, with a screenshot between them. Disable the setup wizard last.
+5. Install mpv and Just Player, which play the movies and episodes, then run `build-and-install.ps1`.
 6. Push the theme, reboot once, and compare `pm list packages -d` before and after.
 
 ## Build
 
-JDK 17 and the Android SDK are set up by `mytv\toolchain.ps1` into `%LOCALAPPDATA%\cleanyourtv-toolchain`. The
-release APK must stay under 786,432 bytes (768 KiB); the current local build is about 640 KiB.
+`mytv\toolchain.ps1` sets up JDK 17 and the Android SDK in `%LOCALAPPDATA%\cleanyourtv-toolchain`. The release
+APK must stay under 786,432 bytes (768 KiB). The current build is about 650 KiB.
 
 ## Not in this repo
 
-Private provider logins, local-library credentials, API keys, and device details stay on my PC on purpose.
+Private provider logins, media-server credentials, API keys and device details are kept on my PC on purpose:
 
 - `mytv\*\backups\`: package and settings snapshots of each TV, taken before any change.
-- `tools\adbkey`: the ADB key that the TVs authorised.
-- `shots\`: screenshots, which show the Wi-Fi name.
+- `tools\adbkey`: the ADB key the TVs have authorized.
+- `shots\`: raw screenshots, which can show personal details.
 
-## Credit and licence
+## Credit and license
 
-Built on Clean Your TV by Gathin23, released under the MIT licence; see [`LICENSE`](LICENSE) and the original
-page at [`README.upstream.md`](README.upstream.md). The room setups, the Movies & Shows rail, the Explore page
-and the other changes above are my own additions to the fork.
+Built on [Clean Your TV](https://github.com/Gathin23/cleanyourtv) by Gathin23, released under the MIT license.
+See [`LICENSE`](LICENSE). The upstream README is kept at [`README.upstream.md`](README.upstream.md). The
+Dashboard, drawer, Movies and Shows rails, the episode guide, the Apps catalog and the room setups are my own
+additions to the fork.
